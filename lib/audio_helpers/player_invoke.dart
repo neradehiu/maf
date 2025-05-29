@@ -63,17 +63,22 @@ class PlayerInvoke {
   /// Cập nhật queue và gọi playAS
   static Future<void> updateNPlay(List<MediaItem> queue, int index) async {
     try {
-      // Tắt shuffle mode
       await pageManager.setShuffleMode(AudioServiceShuffleMode.none);
-      // Thêm toàn bộ queue và bắt đầu tại index
       await pageManager.adds(queue, index);
-      // Phát bài tương ứng trên Web và Mobile
+
       final mediaItem = queue[index];
-      await pageManager.playAS(mediaItem);
-      // Cập nhật thời điểm tap
+      // Phân biệt play Web vs Mobile/Desktop
+      if (kIsWeb) {
+        await pageManager.playAS(mediaItem);
+      } else {
+        pageManager.play();
+      }
+
       playerTapTime = DateTime.now();
-    } catch (e) {
-      print('⚠️ Error playing audio: \$e');
+    } catch (e, stack) {
+      debugPrint('⚠️ Error playing audio: $e');
+      debugPrint('$stack');
     }
   }
+
 }
