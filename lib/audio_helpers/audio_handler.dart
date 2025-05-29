@@ -4,30 +4,33 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+/// Khởi tạo AudioService (non-Web) với handler là MyAudioHandler
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
-      builder: () => MyAudioHandler(),
-      config: AudioServiceConfig(
-        androidNotificationChannelId:
-            "com.codeforany.music_player.channel.audio",
-        androidNotificationChannelName: "music_player",
-        androidNotificationIcon: "drawable/ic_stat_music_note",
-        androidShowNotificationBadge: true,
-        androidStopForegroundOnPause: true,
-        notificationColor: Colors.grey[900],
-      ));
+    builder: () => MyAudioHandler(),
+    config: AudioServiceConfig(
+      androidNotificationChannelId: "com.codeforany.music_player.channel.audio",
+      androidNotificationChannelName: "music_player",
+      androidNotificationIcon: "drawable/ic_stat_music_note",
+      androidShowNotificationBadge: true,
+      androidStopForegroundOnPause: true,
+      notificationColor: Colors.grey[900],
+    ),
+  );
 }
 
+/// Định nghĩa interface cho AudioPlayerHandler (non-Web)
 abstract class AudioPlayerHandler implements AudioHandler {
   Future<void> setNewPlaylist(List<MediaItem> mediaItems, int index);
   Future<void> moveQueueItem(int currentIndex, int newIndex);
   Future<void> removeQueueItemIndex(int index);
 }
 
+/// Cài đặt MyAudioHandler dùng just_audio + audio_service
 class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
   final player = AudioPlayer();
-  final playlist =
-      ConcatenatingAudioSource(children: [], useLazyPreparation: true);
+  final playlist = ConcatenatingAudioSource(children: [], useLazyPreparation: true);
+
   late List<int> preferredCompactNotificationButton = [1, 2, 3];
 
   MyAudioHandler() {
@@ -43,10 +46,11 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
       preferredCompactNotificationButton = [0, 1, 2];
       await player.setAudioSource(playlist);
     } catch (e) {
-      print("Error: $e");
+      print("Error loadEmptyPlaylist: $e");
     }
   }
 
+  /// Gửi lại trạng thái lên AudioService khi player thay đổi
   Future<void> notifyAudioHandlerAboutPlaybackEvents() async {
     player.playbackEventStream.listen((event) {
       final playing = player.playing;
@@ -83,6 +87,7 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
     });
   }
 
+  /// Khi duration của bài thay đổi, cập nhật lại MediaItem trong queue
   Future<void> listenForDurationChanges() async {
     player.durationStream.listen((duration) {
       var index = player.currentIndex;
@@ -99,6 +104,7 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
     });
   }
 
+  /// Khi bài hiện tại thay đổi, phát lại đúng MediaItem đó
   Future<void> listenForCurrentSongIndexChanges() async {
     player.currentIndexStream.listen((index) {
       final pPlaylist = queue.value;
@@ -110,6 +116,7 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
     });
   }
 
+  /// Khi sequence state thay đổi (ví dụ shuffle), cập nhật queue cho AudioService
   Future<void> listenForSequenceStateChanges() async {
     player.sequenceStateStream.listen((sequenceState) {
       final sequence = sequenceState?.effectiveSequence;
@@ -119,8 +126,13 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
     });
   }
 
+  //================================================================================
+  // Override các method của AudioHandler (non-Web)
+  //================================================================================
+
   @override
   Future<void> addQueueItem(MediaItem mediaItem) async {
+    // Tạo audioSource từ mediaItem.extras['url'], đã được mapToMediaItem setup
     final audioSource = createAudioSource(mediaItem);
     await playlist.add(audioSource);
     final newQueue = queue.value..add(mediaItem);
@@ -129,8 +141,8 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
 
   @override
   Future<void> addQueueItems(List<MediaItem> mediaItems) async {
-    final audioSource = createAudioSources(mediaItems);
-    await playlist.addAll(audioSource);
+    final audioSources = createAudioSources(mediaItems);
+    await playlist.addAll(audioSources);
     final newQueue = queue.value..addAll(mediaItems);
     queue.add(newQueue);
   }
@@ -144,21 +156,28 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
   }
 
   @override
-  Future<void> updateQueue(List<MediaItem> queue) async {
+  Future<void> updateQueue(List<MediaItem> queueItems) async {
     await playlist.clear();
-    await playlist.addAll(createAudioSources(queue));
+    await playlist.addAll(createAudioSources(queueItems));
   }
 
+  /// Tạo một UriAudioSource từ field extras['url']
   UriAudioSource createAudioSource(MediaItem mediaItem) {
-    return AudioSource.uri(Uri.parse(mediaItem.extras!['url'] as String),
-        tag: mediaItem);
+    // Chắc chắn rằng extras['url'] chứa đúng URL MP3 (HTTPS)
+    return AudioSource.uri(
+      Uri.parse(mediaItem.extras!['url'] as String),
+      tag: mediaItem,
+    );
   }
 
+  /// Tạo danh sách UriAudioSource từ List<MediaItem>
   List<UriAudioSource> createAudioSources(List<MediaItem> mediaItems) {
-    return mediaItems
-        .map((item) => AudioSource.uri(Uri.parse(item.extras!['url'] as String),
-            tag: item))
-        .toList();
+    return mediaItems.map((item) =>
+        AudioSource.uri(
+            Uri.parse(item.extras!['url'] as String),
+            tag: item
+        )
+    ).toList();
   }
 
   @override
@@ -194,12 +213,12 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
 
   @override
   Future<void> skipToNext() async {
-     player.seekToNext();
+    await player.seekToNext();
   }
 
   @override
   Future<void> skipToPrevious() async {
-     player.seekToPrevious();
+    await player.seekToPrevious();
   }
 
   @override
@@ -230,16 +249,18 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
 
   @override
   Future customAction(String name, [Map<String, dynamic>? extras]) async {
-    if(name == 'dispose') {
+    if (name == 'dispose') {
       await player.dispose();
-      super.stop();
+      await super.stop();
     }
   }
 
   @override
   Future<void> stop() async {
     await player.stop();
-    playbackState.add( playbackState.value.copyWith(processingState: AudioProcessingState.idle) );
+    playbackState.add(
+        playbackState.value.copyWith(processingState: AudioProcessingState.idle)
+    );
     return super.stop();
   }
 
@@ -259,13 +280,19 @@ class MyAudioHandler extends BaseAudioHandler implements AudioPlayerHandler {
       await player.stop();
     }
 
-    var getCount = queue.value.length;
-    await playlist.removeRange(0, getCount);
-    final audioSource = createAudioSources(mediaItems);
-    await playlist.addAll(audioSource);
-    final newQueue = queue.value..addAll(mediaItems);
+    final count = queue.value.length;
+    if (count > 0) {
+      await playlist.removeRange(0, count);
+    }
+    final audioSources = createAudioSources(mediaItems);
+    await playlist.addAll(audioSources);
+    final newQueue = <MediaItem>[];
+    newQueue.addAll(mediaItems);
     queue.add(newQueue);
-    await player.setAudioSource(playlist,
-        initialIndex: index, initialPosition: Duration.zero);
+    await player.setAudioSource(
+        playlist,
+        initialIndex: index,
+        initialPosition: Duration.zero
+    );
   }
 }

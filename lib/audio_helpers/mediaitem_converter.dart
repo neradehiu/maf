@@ -1,31 +1,48 @@
 import 'package:audio_service/audio_service.dart';
 
 class MediaItemConverter {
-  static MediaItem mapToMediaItem(Map song,
-      {bool addedByAutoplay = false,
-      bool autoplay = true,
-      String? playlistBox}) {
+  /// Chuyển một Map (song) thành MediaItem, trong đó:
+  /// - song['url'] phải là đường dẫn MP3 (đã fix thành HTTPS).
+  /// - song['image'] (nếu có) là đường dẫn hình.
+  static MediaItem mapToMediaItem(Map song, {
+    bool addedByAutoplay = false,
+    bool autoplay = true,
+    String? playlistBox
+  }) {
+    // Lấy rawUrl từ key 'url'
+    final rawUrl = (song['url'] as String?) ?? '';
+    // Nếu rawUrl khởi đầu bằng 'http://', đổi thành 'https://'
+    final fixedUrl = rawUrl.startsWith('http://')
+        ? rawUrl.replaceFirst('http://', 'https://')
+        : rawUrl;
+
     return MediaItem(
-      id: song['id'].toString(),
-      album: song['album'].toString(),
-      artist: song['artist'].toString(),
+      // Quan trọng: id phải là URL MP3, không phải map['id'] (là số)
+      id: fixedUrl,
+
+      // Phần thông tin mô tả (dùng đúng các trường backend trả về)
+      album: song['album']?.toString() ?? '',
+      artist: song['artist']?.toString() ?? '',
       duration: Duration(
-         seconds: int.parse(
+        seconds: int.parse(
           (song['duration'] == null ||
-                  song['duration'] == 'null' ||
-                  song['duration'] == '')
+              song['duration'] == 'null' ||
+              song['duration'] == '')
               ? '180'
               : song['duration'].toString(),
         ),
       ),
-      title: song['title'].toString(),
-      artUri: Uri.parse(
-        getImageUrl(song['image'].toString()),
-      ),
-      genre: song['language'].toString(),
+      title: song['title']?.toString() ?? '',
+
+      // artUri có thể parse thẳng từ 'image', nếu backend trả về link ảnh
+      artUri: Uri.tryParse(
+          song['image']?.toString().replaceAll('http:', 'https:') ?? ''
+      ) ?? Uri(),
+      genre: song['language']?.toString() ?? '',
+
       extras: {
         'user_id': song['user_id'],
-        'url': song['url'],
+        'url': fixedUrl,         // Lưu lại URL trong extras, để audio_service non-web cũng dùng
         'album_id': song['album_id'],
         'addedByAutoplay': addedByAutoplay,
         'autoplay': autoplay,
@@ -34,6 +51,7 @@ class MediaItemConverter {
     );
   }
 }
+
 
 String getImageUrl(String? imageUrl, {String quality = 'high'}) {
   if (imageUrl == null) return '';
