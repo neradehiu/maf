@@ -61,7 +61,7 @@ class PlayerInvoke {
       if (kIsWeb) {
         await pageManager.playAS(mediaItem);
       } else {
-        pageManager.play(); // nhớ dùng await nếu play là async
+        pageManager.play();
       }
 
       playerTapTime = DateTime.now();
