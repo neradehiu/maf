@@ -1,3 +1,5 @@
+// lib/view/main_player/main_player_view.dart
+
 import 'dart:math';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:audio_service/audio_service.dart';
@@ -15,8 +17,19 @@ import 'package:music_player/view/main_player/play_playlist_view.dart';
 import 'package:music_player/view/main_player/driver_mode_view.dart';
 import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
+/// MainPlayerView bao gồm 2 phần chính:
+/// - Phần hiển thị Player (artwork, progress, controls)
+/// - Phần list bài hát để người dùng chọn
+///
+/// allSongsList là List<Map> chứa dữ liệu bài hát từ API.
+/// Nếu không truyền vào, mặc định nó sẽ là List rỗng.
 class MainPlayerView extends StatefulWidget {
-  const MainPlayerView({super.key});
+  final List<Map<String, dynamic>> allSongsList;
+
+  const MainPlayerView({
+    Key? key,
+    this.allSongsList = const [],
+  }) : super(key: key);
 
   @override
   State<MainPlayerView> createState() => _MainPlayerViewState();
@@ -49,7 +62,7 @@ class _MainPlayerViewState extends State<MainPlayerView> {
     }
   }
 
-  /// Helper: convert mọi URL bắt đầu bằng "http://" sang "https://"
+  /// Helper: chuyển mọi URL nếu bắt đầu bằng "http://" → "https://"
   String _ensureHttps(String url) {
     if (url.startsWith('http://')) {
       return url.replaceFirst('http://', 'https://');
@@ -61,76 +74,102 @@ class _MainPlayerViewState extends State<MainPlayerView> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Dismissible(
-      key: const Key("playScreen"),
-      direction: DismissDirection.down,
-      background: const ColoredBox(color: Colors.transparent),
-      onDismissed: (_) => Get.back(),
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: TColor.bg,
-          elevation: 0,
-          leading: IconButton(
-            onPressed: () => Get.back(),
-            icon: Image.asset("assets/img/back.png", width: 25, height: 25),
+    return Scaffold(
+      backgroundColor: TColor.bg,
+      appBar: AppBar(
+        backgroundColor: TColor.bg,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Get.back(),
+          icon: Image.asset("assets/img/back.png", width: 25, height: 25),
+        ),
+        title: Text(
+          "Now Playing",
+          style: TextStyle(
+            color: TColor.primaryText80,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
           ),
-          title: Text(
-            "Now Playing",
-            style: TextStyle(
-              color: TColor.primaryText80,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          actions: [
-            PopupMenuButton<int>(
-              color: const Color(0xff383B49),
-              offset: const Offset(-10, 15),
-              elevation: 1,
-              icon: Image.asset(
-                "assets/img/more_btn.png",
-                width: 20,
-                height: 20,
-                color: Colors.white,
-              ),
-              onSelected: (selectIndex) {
-                switch (selectIndex) {
-                  case 1:
-                    Share.share(
-                        'Listening to ${pageManager.currentSongNotifier.value?.title}');
-                    break;
-                  case 2:
-                    openPlayPlaylistQueue();
-                    break;
-                  case 9:
-                    openDriverModel();
-                    break;
+        ),
+      ),
+      body: Column(
+        children: [
+          // Nếu currentSongNotifier null → hiển thị hướng dẫn hoặc text
+          Expanded(
+            child: ValueListenableBuilder<MediaItem?>(
+              valueListenable: pageManager.currentSongNotifier,
+              builder: (context, mediaItem, _) {
+                if (mediaItem == null) {
+                  return Center(
+                    child: Text("Chưa có bài nào được chọn",
+                        style: TextStyle(color: TColor.primaryText)),
+                  );
                 }
+                return _buildPlayerContent(context, size, mediaItem);
               },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                    value: 1,
-                    child: Text("Social Share",
-                        style: TextStyle(fontSize: 12))),
-                const PopupMenuItem(
-                    value: 2,
-                    child: Text("Playing Queue",
-                        style: TextStyle(fontSize: 12))),
-                const PopupMenuItem(
-                    value: 9,
-                    child: Text("Driver mode",
-                        style: TextStyle(fontSize: 12))),
-              ],
             ),
-          ],
-        ),
-        body: ValueListenableBuilder<MediaItem?>(
-          valueListenable: pageManager.currentSongNotifier,
-          builder: (context, mediaItem, _) {
-            if (mediaItem == null) return const SizedBox();
-            return _buildPlayerContent(context, size, mediaItem);
-          },
-        ),
+          ),
+
+          const Divider(color: Colors.grey, height: 1),
+
+          // ListView các bài hát (dùng trực tiếp widget.allSongsList)
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.allSongsList.length,
+              itemBuilder: (context, index) {
+                final songMap = widget.allSongsList[index];
+                final rawUrl = (songMap["cloudinaryUrl"] as String?) ?? '';
+                final fixedUrl = _ensureHttps(rawUrl);
+
+                return ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: CachedNetworkImage(
+                      imageUrl: songMap["imageUrl"] ?? '',
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => const SizedBox(),
+                      errorWidget: (_, __, ___) =>
+                      const Icon(Icons.music_note),
+                    ),
+                  ),
+                  title: Text(
+                    songMap["title"] ?? "",
+                    style: TextStyle(color: TColor.primaryText),
+                  ),
+                  subtitle: Text(
+                    songMap["artist"] ?? "",
+                    style: TextStyle(color: TColor.primaryText35),
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(
+                      Icons.play_circle_fill,
+                      color: TColor.primaryText,
+                    ),
+                    onPressed: () {
+                      // Khi user bấm play 1 bài, dựng playlist từ allSongsList
+                      final playlist = widget.allSongsList.map((song) {
+                        return {
+                          'id': (song["id"]?.toString() ?? ''),
+                          'title': song["title"] ?? '',
+                          'artist': song["artist"] ?? '',
+                          'url': _ensureHttps(song["cloudinaryUrl"] ?? ''),
+                          // thêm nếu cần album, genre, v.v.
+                        };
+                      }).toList();
+
+                      debugPrint("▶️ Đang play bài index = $index");
+                      debugPrint("▶️ Playlist = $playlist");
+
+                      songDeleteService.onPressedPlay(playlist, index);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -144,11 +183,10 @@ class _MainPlayerViewState extends State<MainPlayerView> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         children: [
-          const SizedBox(height: 20),
-          // Artwork
+          // ------- Artwork -------
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: CachedNetworkImage(
@@ -157,12 +195,13 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               height: size.width * 0.8,
               fit: BoxFit.cover,
               placeholder: (_, __) => const SizedBox(),
-              errorWidget: (_, __, ___) => const Icon(Icons.music_note,
-                  size: 80),
+              errorWidget: (_, __, ___) =>
+              const Icon(Icons.music_note, size: 80),
             ),
           ),
           const SizedBox(height: 20),
-          // Progress slider
+
+          // ------- Progress slider -------
           ValueListenableBuilder<ProgressBarState>(
             valueListenable: pageManager.progressNotifier,
             builder: (_, progress, __) => SleekCircularSlider(
@@ -174,17 +213,15 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               },
               innerWidget: (_) => Center(
                 child: Text(
-                  formatDuration(progress.current) +
-                      " / " +
-                      formatDuration(progress.total),
-                  style:
-                  TextStyle(color: TColor.primaryText, fontSize: 12),
+                  "${formatDuration(progress.current)} / ${formatDuration(progress.total)}",
+                  style: TextStyle(color: TColor.primaryText, fontSize: 12),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 20),
-          // Play controls
+
+          // ------- Play controls -------
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -208,32 +245,19 @@ class _MainPlayerViewState extends State<MainPlayerView> {
                     return const CircularProgressIndicator();
                   return InkWell(
                     onTap: () {
-                      // Build playlist List<Map> trực tiếp từ dữ liệu ViewModel (allVM.allList)
-                      final playlist = pageManager.playlistNotifier.value
-                          .map((m) => {
-                        'id': m.id,
-                        'title': m.title,
-                        'artist': m.artist,
-                        'url': m.id, // id chính là URL đã được fix HTTPS
-                      })
-                          .toList();
-
-                      // Nhưng nếu bạn muốn build playlist từ allVM.allList (nguyên bản),
-                      // bạn có thể dùng đoạn “tham khảo” bên dưới (thay thế pageManager.playlistNotifier):
-                      //
-                      // final playlist = allVM.allList.map((song) {
-                      //   return {
-                      //     'id': song["id"]?.toString() ?? '',
-                      //     'title': song["title"] ?? '',
-                      //     'artist': song["artist"] ?? '',
-                      //     'url': _ensureHttps(song["cloudinaryUrl"] ?? ''),
-                      //   };
-                      // }).toList();
-
-                      final currentIndex =
-                      pageManager.playlistNotifier.value.indexOf(mediaItem);
-                      songDeleteService.onPressedPlay(
-                          playlist, currentIndex);
+                      if (buttonState == ButtonState.playing) {
+                        pageManager.pause();
+                      } else {
+                        if (kIsWeb) {
+                          final current =
+                              pageManager.currentSongNotifier.value;
+                          if (current != null) {
+                            pageManager.playAS(current);
+                          }
+                        } else {
+                          pageManager.play();
+                        }
+                      }
                     },
                     child: Image.asset(
                       buttonState == ButtonState.playing
@@ -249,18 +273,18 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               ValueListenableBuilder<bool>(
                 valueListenable: pageManager.isLastSongNotifier,
                 builder: (_, isLast, __) => IconButton(
-                  icon: Image.asset(
-                    "assets/img/next_song.png",
-                    color:
-                    isLast ? TColor.primaryText35 : TColor.primaryText,
-                  ),
+                  icon: Image.asset("assets/img/next_song.png",
+                      color: isLast
+                          ? TColor.primaryText35
+                          : TColor.primaryText),
                   onPressed: isLast ? null : pageManager.next,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          // Bottom actions: Share count, favorites, queue
+
+          // ------- Bottom actions: Share, Favorite, Queue -------
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -285,7 +309,13 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               PlayerBottomButton(
                 title: 'Queue',
                 icon: 'assets/img/playlist.png',
-                onPressed: openPlayPlaylistQueue,
+                onPressed: () => Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    opaque: false,
+                    pageBuilder: (_, __, ___) => const PlayPlayListView(),
+                  ),
+                ),
               ),
             ],
           ),

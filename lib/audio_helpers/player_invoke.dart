@@ -1,3 +1,5 @@
+// lib/audio_helpers/player_invoke.dart
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
@@ -18,7 +20,8 @@ void playerPlayProcessDebounce(List songsList, int index) {
 class PlayerInvoke {
   static final pageManager = getIt<PageManager>();
 
-  /// Nếu từ mini‐player, ta không reset queue; nếu không phải Web thì dừng audioService
+  /// songsList: List<Map> – chính là playlist mà bạn truyền từ MainPlayerView
+  /// index: vị trí của bài được chọn
   static Future<void> init({
     required List songsList,
     required int index,
@@ -27,11 +30,11 @@ class PlayerInvoke {
     String? playlistBox,
   }) async {
     final globalIndex = index < 0 ? 0 : index;
-    final finalList = songsList.toList();
+    final finalList = List<Map<String, dynamic>>.from(songsList);
     if (shuffle) finalList.shuffle();
 
     if (!fromMiniPlayer && !kIsWeb) {
-      await pageManager.stop();
+      await pageManager.stop(); // Chỉ dừng audio_service trên non-web
     }
 
     await setValues(finalList, globalIndex);
@@ -39,10 +42,13 @@ class PlayerInvoke {
 
   static Future<void> setValues(List arr, int index,
       {bool recommend = false}) async {
+    // Chuyển List<Map> thành List<MediaItem>
     final queue = arr
-        .map((song) =>
-        MediaItemConverter.mapToMediaItem(song as Map, autoplay: recommend))
+        .map((songMap) => MediaItemConverter.mapToMediaItem(
+        songMap as Map<String, dynamic>,
+        autoplay: recommend))
         .toList();
+
     await updateNPlay(queue, index);
   }
 
@@ -50,39 +56,45 @@ class PlayerInvoke {
       List<MediaItem>? queue, int index) async {
     try {
       if (queue == null || index < 0 || index >= queue.length) {
-        debugPrint('⚠️ queue is null or index out of range');
+        debugPrint('⚠️ [PlayerInvoke] queue is null or index out of range');
         return;
       }
 
-      // Trước khi làm gì, hãy "fix" mỗi MediaItem.id (nếu bắt đầu bằng http://) → https://
+      // Fix từng MediaItem.id từ http:// → https:// nếu cần
       final fixedQueue = queue.map((item) {
         final rawUrl = item.id;
         final fixedUrl = rawUrl.startsWith('http://')
             ? rawUrl.replaceFirst('http://', 'https://')
             : rawUrl;
+        // Thêm debug để chắc rawUrl, fixedUrl
+        debugPrint("🔧 [PlayerInvoke] rawUrl = $rawUrl → fixedUrl = $fixedUrl");
         return item.copyWith(id: fixedUrl);
       }).toList();
 
       final mediaItem = fixedQueue[index];
-      if (mediaItem == null) {
-        debugPrint('⚠️ mediaItem is null');
+      if (mediaItem.id.isEmpty) {
+        debugPrint('⚠️ [PlayerInvoke] mediaItem.id rỗng');
         return;
       }
 
-      // Nếu chạy trên Web, chỉ cần playAS với fixedQueue
+      // Nếu chạy Web, ta chỉ gọi playAS (just_audio) rồi return
       if (kIsWeb) {
+        debugPrint("▶️ [PlayerInvoke] Đang chạy Web, gọi playAS(url)");
         await pageManager.playAS(mediaItem);
         playerTapTime = DateTime.now();
         return;
       }
 
-      // Non‐web (mobile/desktop) vẫn dùng audio_service:
+      // ------------------------------
+      // Non‑Web (Android/iOS/desktop)
+      // ------------------------------
+      debugPrint("▶️ [PlayerInvoke] Đang chạy non‑Web, gọi setShuffleMode + adds + play");
       await pageManager.setShuffleMode(AudioServiceShuffleMode.none);
       await pageManager.adds(fixedQueue, index);
       pageManager.play();
       playerTapTime = DateTime.now();
     } catch (e, stack) {
-      debugPrint('⚠️ Error playing audio: ${e.toString()}');
+      debugPrint('⚠️ [PlayerInvoke] Error playing audio: ${e.toString()}');
       debugPrint(stack.toString());
     }
   }
