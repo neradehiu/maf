@@ -6,13 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:music_player/audio_helpers/page_manager.dart';
 import 'package:music_player/audio_helpers/service_locator.dart';
-import 'package:music_player/common_widget/player_bottom_button.dart';
-import 'package:music_player/view/main_player/driver_mode_view.dart';
-import 'package:music_player/view/main_player/play_playlist_view.dart';
-import 'package:sleek_circular_slider/sleek_circular_slider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:music_player/services/song_service.dart';
-import '../../common/color_extension.dart';
+import 'package:music_player/view/songs/song_delete_server.dart';
+import 'package:music_player/common/color_extension.dart';
+import 'package:music_player/common_widget/player_bottom_button.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:music_player/view/main_player/play_playlist_view.dart';
+import 'package:music_player/view/main_player/driver_mode_view.dart';
+import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
 class MainPlayerView extends StatefulWidget {
   const MainPlayerView({super.key});
@@ -24,12 +25,12 @@ class MainPlayerView extends StatefulWidget {
 class _MainPlayerViewState extends State<MainPlayerView> {
   int _shareCount = 0;
   late final PageManager pageManager;
+  final songDeleteService = SongDeleteService();
 
   @override
   void initState() {
     super.initState();
     pageManager = getIt<PageManager>();
-    // Always init streams & listeners, even on Web
     pageManager.init();
     final mediaItem = pageManager.currentSongNotifier.value;
     if (mediaItem != null) {
@@ -50,7 +51,7 @@ class _MainPlayerViewState extends State<MainPlayerView> {
 
   @override
   Widget build(BuildContext context) {
-    var media = MediaQuery.sizeOf(context);
+    final size = MediaQuery.of(context).size;
 
     return Dismissible(
       key: const Key("playScreen"),
@@ -87,9 +88,7 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               onSelected: (selectIndex) {
                 switch (selectIndex) {
                   case 1:
-                    Share.share(
-                      'Listening to ${pageManager.currentSongNotifier.value?.title}',
-                    );
+                    Share.share('Listening to ${pageManager.currentSongNotifier.value?.title}');
                     break;
                   case 2:
                     openPlayPlaylistQueue();
@@ -102,7 +101,6 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 1, child: Text("Social Share", style: TextStyle(fontSize: 12))),
                 const PopupMenuItem(value: 2, child: Text("Playing Queue", style: TextStyle(fontSize: 12))),
-                // ...
                 const PopupMenuItem(value: 9, child: Text("Driver mode", style: TextStyle(fontSize: 12))),
               ],
             ),
@@ -112,18 +110,14 @@ class _MainPlayerViewState extends State<MainPlayerView> {
           valueListenable: pageManager.currentSongNotifier,
           builder: (context, mediaItem, _) {
             if (mediaItem == null) return const SizedBox();
-            return _buildPlayerContent(context, media, mediaItem);
+            return _buildPlayerContent(context, size, mediaItem);
           },
         ),
       ),
     );
   }
 
-  Widget _buildPlayerContent(
-      BuildContext context,
-      Size media,
-      MediaItem mediaItem,
-      ) {
+  Widget _buildPlayerContent(BuildContext context, Size size, MediaItem mediaItem) {
     String formatDuration(Duration duration) {
       final match = RegExp(r'((^0*[1-9]\d*:)?\d{2}:\d{2})\.\d+$')
           .firstMatch(duration.toString());
@@ -132,71 +126,126 @@ class _MainPlayerViewState extends State<MainPlayerView> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            // ... artwork & progress indicator ...
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: pageManager.isFirstSongNotifier,
-                  builder: (_, isFirst, __) => IconButton(
-                    icon: Image.asset(
-                      "assets/img/previous_song.png",
-                      color: isFirst ? TColor.primaryText35 : TColor.primaryText,
-                    ),
-                    onPressed: isFirst ? null : pageManager.previous,
-                  ),
-                ),
-                const SizedBox(width: 15),
-                ValueListenableBuilder<ButtonState>(
-                  valueListenable: pageManager.playButtonNotifier,
-                  builder: (_, buttonState, __) {
-                    if (buttonState == ButtonState.loading) {
-                      return const CircularProgressIndicator();
-                    }
-                    return InkWell(
-                      onTap: () {
-                        if (buttonState == ButtonState.playing) {
-                          pageManager.pause();
-                        } else {
-                          // On Web call playAS, on non-web call play()
-                          if (kIsWeb) {
-                            pageManager.playAS(mediaItem);
-                          } else {
-                            pageManager.play();
-                          }
-                        }
-                      },
-                      child: Image.asset(
-                        buttonState == ButtonState.playing
-                            ? "assets/img/pause.png"
-                            : "assets/img/play.png",
-                        width: 60,
-                        height: 60,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 15),
-                ValueListenableBuilder<bool>(
-                  valueListenable: pageManager.isLastSongNotifier,
-                  builder: (_, isLast, __) => IconButton(
-                    icon: Image.asset(
-                      "assets/img/next_song.png",
-                      color: isLast ? TColor.primaryText35 : TColor.primaryText,
-                    ),
-                    onPressed: isLast ? null : pageManager.next,
-                  ),
-                ),
-              ],
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          // Artwork
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: CachedNetworkImage(
+              imageUrl: mediaItem.extras?['image'] ?? '',
+              width: size.width * 0.8,
+              height: size.width * 0.8,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => const SizedBox(),
+              errorWidget: (_, __, ___) => const Icon(Icons.music_note, size: 80),
             ),
-            // ... bottom buttons, share count, etc. ...
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          // Progress slider
+          ValueListenableBuilder<ProgressBarState>(
+            valueListenable: pageManager.progressNotifier,
+            builder: (_, progress, __) => SleekCircularSlider(
+              min: 0,
+              max: progress.total.inMilliseconds.toDouble(),
+              initialValue: progress.current.inMilliseconds.toDouble(),
+              onChangeEnd: (value) {
+                pageManager.seek(Duration(milliseconds: value.toInt()));
+              },
+              innerWidget: (_) => Center(
+                child: Text(
+                  formatDuration(progress.current) + " / " + formatDuration(progress.total),
+                  style: TextStyle(color: TColor.primaryText, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Play controls
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ValueListenableBuilder<bool>(
+                valueListenable: pageManager.isFirstSongNotifier,
+                builder: (_, isFirst, __) => IconButton(
+                  icon: Image.asset(
+                    "assets/img/previous_song.png",
+                    color: isFirst ? TColor.primaryText35 : TColor.primaryText,
+                  ),
+                  onPressed: isFirst ? null : pageManager.previous,
+                ),
+              ),
+              const SizedBox(width: 15),
+              ValueListenableBuilder<ButtonState>(
+                valueListenable: pageManager.playButtonNotifier,
+                builder: (_, buttonState, __) {
+                  if (buttonState == ButtonState.loading) return const CircularProgressIndicator();
+                  return InkWell(
+                    onTap: () {
+                      final playlist = pageManager.playlistNotifier.value
+                          .map((m) => {
+                        'id': m.id,
+                        'title': m.title,
+                        'artist': m.artist,
+                        'url': m.id
+                      })
+                          .toList();
+                      final currentIndex = pageManager.playlistNotifier.value.indexOf(mediaItem);
+                      songDeleteService.onPressedPlay(playlist, currentIndex);
+                    },
+                    child: Image.asset(
+                      buttonState == ButtonState.playing
+                          ? "assets/img/pause.png"
+                          : "assets/img/play.png",
+                      width: 60,
+                      height: 60,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 15),
+              ValueListenableBuilder<bool>(
+                valueListenable: pageManager.isLastSongNotifier,
+                builder: (_, isLast, __) => IconButton(
+                  icon: Image.asset(
+                    "assets/img/next_song.png",
+                    color: isLast ? TColor.primaryText35 : TColor.primaryText,
+                  ),
+                  onPressed: isLast ? null : pageManager.next,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Bottom actions: Share count, favorites, queue
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              PlayerBottomButton(
+                title: 'Favorite',
+                icon: 'assets/img/favorite.png',
+                onPressed: (){}, // TODO: toggle favorite
+              ),
+              Row(
+                children: [
+                  PlayerBottomButton(
+                    title: 'Share',
+                    icon: 'assets/img/share.png',
+                    onPressed: () => Share.share('Listening to ${mediaItem.title}'),
+                  ),
+                  const SizedBox(width: 4),
+                  Text('$_shareCount', style: TextStyle(color: TColor.primaryText)),
+                ],
+              ),
+              PlayerBottomButton(
+                title: 'Queue',
+                icon: 'assets/img/playlist.png',
+                onPressed: openPlayPlaylistQueue,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }
