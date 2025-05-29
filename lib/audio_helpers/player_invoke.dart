@@ -18,6 +18,7 @@ void playerPlayProcessDebounce(List songsList, int index) {
 class PlayerInvoke {
   static final pageManager = getIt<PageManager>();
 
+  /// Nếu từ mini‐player (tức là đang play sẵn rồi), ta không reset queue; nếu không phải Web thì dừng hẳn audioService
   static Future<void> init({
     required List songsList,
     required int index,
@@ -32,6 +33,7 @@ class PlayerInvoke {
     if (!fromMiniPlayer && !kIsWeb) {
       await pageManager.stop();
     }
+
     await setValues(finalList, globalIndex);
   }
 
@@ -48,22 +50,25 @@ class PlayerInvoke {
         debugPrint('⚠️ queue is null or index out of range');
         return;
       }
-
       final mediaItem = queue[index];
       if (mediaItem == null) {
         debugPrint('⚠️ mediaItem is null');
         return;
       }
 
+      // **Nếu chạy trên Web, bỏ qua toàn bộ setShuffleMode + adds, chỉ cần playAS**
+      if (kIsWeb) {
+        await pageManager.playAS(mediaItem);
+        playerTapTime = DateTime.now();
+        return;
+      }
+
+      // Chỉ chạy hai bước này khi non‐web (có audioHandler)
       await pageManager.setShuffleMode(AudioServiceShuffleMode.none);
       await pageManager.adds(queue, index);
 
-      if (kIsWeb) {
-        await pageManager.playAS(mediaItem);
-      } else {
-        pageManager.play();
-      }
-
+      // Mobile/Desktop: play bằng audioService
+      pageManager.play();
       playerTapTime = DateTime.now();
     } catch (e, stack) {
       debugPrint('⚠️ Error playing audio: ${e.toString()}');

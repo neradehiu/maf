@@ -1,4 +1,3 @@
-// file: lib/audio_helpers/page_manager.dart
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
@@ -60,7 +59,7 @@ class PageManager {
 
   PageManager() {
     if (kIsWeb) {
-      // Web: just_audio directly
+      // Web: just_audio trực tiếp
       _player = AudioPlayer();
       audioHandler = null;
       _initWebListeners();
@@ -260,6 +259,14 @@ class PageManager {
 
   /// Stop playback, clear queue (non-web)
   Future<void> stop() async {
+    if (kIsWeb) {
+      // Nếu Web, chỉ cần dừng player của just_audio
+      await _player.stop();
+      await _player.seek(Duration.zero);
+      currentSongNotifier.value = null;
+      return;
+    }
+
     _checkAudioHandler();
     await audioHandler.stop();
     await audioHandler.seek(Duration.zero);
@@ -269,18 +276,21 @@ class PageManager {
   }
 
   Future<void> setShuffleMode(AudioServiceShuffleMode value) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     isShuffleModeEnabledNotifier.value = value == AudioServiceShuffleMode.all;
     return await audioHandler.setShuffleMode(value);
   }
 
   /// Add a single item (non-web)
   Future<void> add(MediaItem item) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     await audioHandler.addQueueItem(item);
   }
 
   /// Add multiple, bắt đầu từ [index] (non-web)
   Future<void> adds(List<MediaItem> items, int index) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     if (items.isEmpty) return;
     await (audioHandler as MyAudioHandler).setNewPlaylist(items, index);
@@ -288,20 +298,27 @@ class PageManager {
 
   /// Update queue wholesale (non-web)
   Future<void> updateQueue(List<MediaItem> queue) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     await audioHandler.updateQueue(queue);
   }
+
   Future<void> skipToQueueItem(int index) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua thao tác non-web
+    _checkAudioHandler();
     return await audioHandler.skipToQueueItem(index);
   }
+
   /// Update single MediaItem (non-web)
   Future<void> updateMediaItem(MediaItem item) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     await audioHandler.updateMediaItem(item);
   }
 
   /// Move item in queue (non-web)
   Future<void> moveMediaItem(int oldIndex, int newIndex) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     await (audioHandler as AudioPlayerHandler)
         .moveQueueItem(oldIndex, newIndex);
@@ -309,13 +326,14 @@ class PageManager {
 
   /// Remove at [index] (non-web)
   Future<void> removeQueueItemAt(int index) async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
-    await (audioHandler as AudioPlayerHandler)
-        .removeQueueItemIndex(index);
+    await (audioHandler as AudioPlayerHandler).removeQueueItemIndex(index);
   }
 
   /// Remove last item (non-web)
   void remove() {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     final last = audioHandler.queue.value.length - 1;
     if (last < 0) return;
@@ -324,6 +342,7 @@ class PageManager {
 
   /// Clear all (non-web)
   Future<void> removeAll() async {
+    if (kIsWeb) return; // Trên Web, bỏ qua
     _checkAudioHandler();
     final last = audioHandler.queue.value.length - 1;
     if (last < 0) return;
