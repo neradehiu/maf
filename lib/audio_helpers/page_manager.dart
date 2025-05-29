@@ -357,7 +357,7 @@ class PageManager {
   Future<void> playAS(MediaItem mediaItem) async {
     if (!kIsWeb) return;
     try {
-      await _player.setUrl(mediaItem.id);
+      await _player.setUrl(mediaItem.id); // mediaItem.id đã là HTTPS
       currentSongNotifier.value = mediaItem;
       await _player.play();
     } catch (e) {

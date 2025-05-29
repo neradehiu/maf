@@ -18,7 +18,7 @@ void playerPlayProcessDebounce(List songsList, int index) {
 class PlayerInvoke {
   static final pageManager = getIt<PageManager>();
 
-  /// Nếu từ mini‐player (tức là đang play sẵn rồi), ta không reset queue; nếu không phải Web thì dừng hẳn audioService
+  /// Nếu từ mini‐player, ta không reset queue; nếu không phải Web thì dừng audioService
   static Future<void> init({
     required List songsList,
     required int index,
@@ -37,37 +37,48 @@ class PlayerInvoke {
     await setValues(finalList, globalIndex);
   }
 
-  static Future<void> setValues(List arr, int index, {bool recommend = false}) async {
+  static Future<void> setValues(List arr, int index,
+      {bool recommend = false}) async {
     final queue = arr
-        .map((song) => MediaItemConverter.mapToMediaItem(song as Map, autoplay: recommend))
+        .map((song) =>
+        MediaItemConverter.mapToMediaItem(song as Map, autoplay: recommend))
         .toList();
     await updateNPlay(queue, index);
   }
 
-  static Future<void> updateNPlay(List<MediaItem>? queue, int index) async {
+  static Future<void> updateNPlay(
+      List<MediaItem>? queue, int index) async {
     try {
       if (queue == null || index < 0 || index >= queue.length) {
         debugPrint('⚠️ queue is null or index out of range');
         return;
       }
-      final mediaItem = queue[index];
+
+      // Trước khi làm gì, hãy "fix" mỗi MediaItem.id (nếu bắt đầu bằng http://) → https://
+      final fixedQueue = queue.map((item) {
+        final rawUrl = item.id;
+        final fixedUrl = rawUrl.startsWith('http://')
+            ? rawUrl.replaceFirst('http://', 'https://')
+            : rawUrl;
+        return item.copyWith(id: fixedUrl);
+      }).toList();
+
+      final mediaItem = fixedQueue[index];
       if (mediaItem == null) {
         debugPrint('⚠️ mediaItem is null');
         return;
       }
 
-      // **Nếu chạy trên Web, bỏ qua toàn bộ setShuffleMode + adds, chỉ cần playAS**
+      // Nếu chạy trên Web, chỉ cần playAS với fixedQueue
       if (kIsWeb) {
         await pageManager.playAS(mediaItem);
         playerTapTime = DateTime.now();
         return;
       }
 
-      // Chỉ chạy hai bước này khi non‐web (có audioHandler)
+      // Non‐web (mobile/desktop) vẫn dùng audio_service:
       await pageManager.setShuffleMode(AudioServiceShuffleMode.none);
-      await pageManager.adds(queue, index);
-
-      // Mobile/Desktop: play bằng audioService
+      await pageManager.adds(fixedQueue, index);
       pageManager.play();
       playerTapTime = DateTime.now();
     } catch (e, stack) {

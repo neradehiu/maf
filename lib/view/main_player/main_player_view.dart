@@ -49,6 +49,14 @@ class _MainPlayerViewState extends State<MainPlayerView> {
     }
   }
 
+  /// Helper: convert mọi URL bắt đầu bằng "http://" sang "https://"
+  String _ensureHttps(String url) {
+    if (url.startsWith('http://')) {
+      return url.replaceFirst('http://', 'https://');
+    }
+    return url;
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -88,7 +96,8 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               onSelected: (selectIndex) {
                 switch (selectIndex) {
                   case 1:
-                    Share.share('Listening to ${pageManager.currentSongNotifier.value?.title}');
+                    Share.share(
+                        'Listening to ${pageManager.currentSongNotifier.value?.title}');
                     break;
                   case 2:
                     openPlayPlaylistQueue();
@@ -99,9 +108,18 @@ class _MainPlayerViewState extends State<MainPlayerView> {
                 }
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(value: 1, child: Text("Social Share", style: TextStyle(fontSize: 12))),
-                const PopupMenuItem(value: 2, child: Text("Playing Queue", style: TextStyle(fontSize: 12))),
-                const PopupMenuItem(value: 9, child: Text("Driver mode", style: TextStyle(fontSize: 12))),
+                const PopupMenuItem(
+                    value: 1,
+                    child: Text("Social Share",
+                        style: TextStyle(fontSize: 12))),
+                const PopupMenuItem(
+                    value: 2,
+                    child: Text("Playing Queue",
+                        style: TextStyle(fontSize: 12))),
+                const PopupMenuItem(
+                    value: 9,
+                    child: Text("Driver mode",
+                        style: TextStyle(fontSize: 12))),
               ],
             ),
           ],
@@ -117,7 +135,8 @@ class _MainPlayerViewState extends State<MainPlayerView> {
     );
   }
 
-  Widget _buildPlayerContent(BuildContext context, Size size, MediaItem mediaItem) {
+  Widget _buildPlayerContent(
+      BuildContext context, Size size, MediaItem mediaItem) {
     String formatDuration(Duration duration) {
       final match = RegExp(r'((^0*[1-9]\d*:)?\d{2}:\d{2})\.\d+$')
           .firstMatch(duration.toString());
@@ -138,7 +157,8 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               height: size.width * 0.8,
               fit: BoxFit.cover,
               placeholder: (_, __) => const SizedBox(),
-              errorWidget: (_, __, ___) => const Icon(Icons.music_note, size: 80),
+              errorWidget: (_, __, ___) => const Icon(Icons.music_note,
+                  size: 80),
             ),
           ),
           const SizedBox(height: 20),
@@ -154,8 +174,11 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               },
               innerWidget: (_) => Center(
                 child: Text(
-                  formatDuration(progress.current) + " / " + formatDuration(progress.total),
-                  style: TextStyle(color: TColor.primaryText, fontSize: 12),
+                  formatDuration(progress.current) +
+                      " / " +
+                      formatDuration(progress.total),
+                  style:
+                  TextStyle(color: TColor.primaryText, fontSize: 12),
                 ),
               ),
             ),
@@ -170,7 +193,9 @@ class _MainPlayerViewState extends State<MainPlayerView> {
                 builder: (_, isFirst, __) => IconButton(
                   icon: Image.asset(
                     "assets/img/previous_song.png",
-                    color: isFirst ? TColor.primaryText35 : TColor.primaryText,
+                    color: isFirst
+                        ? TColor.primaryText35
+                        : TColor.primaryText,
                   ),
                   onPressed: isFirst ? null : pageManager.previous,
                 ),
@@ -179,19 +204,36 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               ValueListenableBuilder<ButtonState>(
                 valueListenable: pageManager.playButtonNotifier,
                 builder: (_, buttonState, __) {
-                  if (buttonState == ButtonState.loading) return const CircularProgressIndicator();
+                  if (buttonState == ButtonState.loading)
+                    return const CircularProgressIndicator();
                   return InkWell(
                     onTap: () {
+                      // Build playlist List<Map> trực tiếp từ dữ liệu ViewModel (allVM.allList)
                       final playlist = pageManager.playlistNotifier.value
                           .map((m) => {
                         'id': m.id,
                         'title': m.title,
                         'artist': m.artist,
-                        'url': m.id
+                        'url': m.id, // id chính là URL đã được fix HTTPS
                       })
                           .toList();
-                      final currentIndex = pageManager.playlistNotifier.value.indexOf(mediaItem);
-                      songDeleteService.onPressedPlay(playlist, currentIndex);
+
+                      // Nhưng nếu bạn muốn build playlist từ allVM.allList (nguyên bản),
+                      // bạn có thể dùng đoạn “tham khảo” bên dưới (thay thế pageManager.playlistNotifier):
+                      //
+                      // final playlist = allVM.allList.map((song) {
+                      //   return {
+                      //     'id': song["id"]?.toString() ?? '',
+                      //     'title': song["title"] ?? '',
+                      //     'artist': song["artist"] ?? '',
+                      //     'url': _ensureHttps(song["cloudinaryUrl"] ?? ''),
+                      //   };
+                      // }).toList();
+
+                      final currentIndex =
+                      pageManager.playlistNotifier.value.indexOf(mediaItem);
+                      songDeleteService.onPressedPlay(
+                          playlist, currentIndex);
                     },
                     child: Image.asset(
                       buttonState == ButtonState.playing
@@ -209,7 +251,8 @@ class _MainPlayerViewState extends State<MainPlayerView> {
                 builder: (_, isLast, __) => IconButton(
                   icon: Image.asset(
                     "assets/img/next_song.png",
-                    color: isLast ? TColor.primaryText35 : TColor.primaryText,
+                    color:
+                    isLast ? TColor.primaryText35 : TColor.primaryText,
                   ),
                   onPressed: isLast ? null : pageManager.next,
                 ),
@@ -224,17 +267,19 @@ class _MainPlayerViewState extends State<MainPlayerView> {
               PlayerBottomButton(
                 title: 'Favorite',
                 icon: 'assets/img/favorite.png',
-                onPressed: (){}, // TODO: toggle favorite
+                onPressed: () {}, // TODO: toggle favorite
               ),
               Row(
                 children: [
                   PlayerBottomButton(
                     title: 'Share',
                     icon: 'assets/img/share.png',
-                    onPressed: () => Share.share('Listening to ${mediaItem.title}'),
+                    onPressed: () =>
+                        Share.share('Listening to ${mediaItem.title}'),
                   ),
                   const SizedBox(width: 4),
-                  Text('$_shareCount', style: TextStyle(color: TColor.primaryText)),
+                  Text('$_shareCount',
+                      style: TextStyle(color: TColor.primaryText)),
                 ],
               ),
               PlayerBottomButton(
