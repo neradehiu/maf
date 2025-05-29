@@ -53,8 +53,13 @@ class PageManager {
       audioHandler = null;
       _initWebListeners();
     } else {
-      audioHandler = getIt<AudioHandler>();
-      _player = null;
+      try {
+        audioHandler = getIt<AudioHandler>();
+        _player = null;
+      } catch (e) {
+        throw Exception(
+            "Bạn cần gọi setupServiceLocator() trước khi khởi tạo PageManager.\nChi tiết lỗi: $e");
+      }
     }
   }
 
@@ -81,6 +86,7 @@ class PageManager {
   }
 
   void _listenToChangeInPlaylist() {
+    _checkAudioHandler();
     audioHandler.queue.listen((playlist) {
       playlistNotifier.value = playlist;
       _updateSkipButton();
@@ -88,6 +94,7 @@ class PageManager {
   }
 
   void _updateSkipButton() {
+    _checkAudioHandler();
     final mediaItem = audioHandler.mediaItem.value;
     final playlist = audioHandler.queue.value;
     if (playlist.isEmpty || mediaItem == null) {
@@ -100,6 +107,7 @@ class PageManager {
   }
 
   void _listenToPlayBackState() {
+    _checkAudioHandler();
     audioHandler.playbackState.listen((state) {
       playbackStatNotifier.value = state.processingState;
       if (state.processingState == AudioProcessingState.loading ||
@@ -128,6 +136,7 @@ class PageManager {
   }
 
   void _listenToBufferedPosition() {
+    _checkAudioHandler();
     audioHandler.playbackState.listen((state) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
@@ -139,6 +148,7 @@ class PageManager {
   }
 
   void _listenToTotalPosition() {
+    _checkAudioHandler();
     audioHandler.mediaItem.listen((mediaItem) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
@@ -150,44 +160,77 @@ class PageManager {
   }
 
   void _listenToChangesInSong() {
+    _checkAudioHandler();
     audioHandler.mediaItem.listen((mediaItem) {
       currentSongNotifier.value = mediaItem;
       _updateSkipButton();
     });
   }
 
+  void _checkAudioHandler() {
+    if (audioHandler == null) {
+      throw Exception("audioHandler chưa được khởi tạo. Bạn cần gọi setupServiceLocator() trước.");
+    }
+  }
+
   // Controls (common for non-web)
-  void play() => audioHandler.play();
-  void pause() => audioHandler.pause();
-  void seek(Duration position) => audioHandler.seek(position);
-  void previous() => audioHandler.skipToPrevious();
-  void next() => audioHandler.skipToNext();
+  void play() {
+    _checkAudioHandler();
+    audioHandler.play();
+  }
+
+  void pause() {
+    _checkAudioHandler();
+    audioHandler.pause();
+  }
+
+  void seek(Duration position) {
+    _checkAudioHandler();
+    audioHandler.seek(position);
+  }
+
+  void previous() {
+    _checkAudioHandler();
+    audioHandler.skipToPrevious();
+  }
+
+  void next() {
+    _checkAudioHandler();
+    audioHandler.skipToNext();
+  }
 
   Future<void> updateQueue(List<MediaItem> queue) async {
+    _checkAudioHandler();
     return await audioHandler.updateQueue(queue);
   }
 
   Future<void> updateMediaItem(MediaItem item) async {
+    _checkAudioHandler();
     return await audioHandler.updateMediaItem(item);
   }
 
   Future<void> moveMediaItem(int oldIndex, int newIndex) async {
+    _checkAudioHandler();
     return await (audioHandler as AudioPlayerHandler).moveQueueItem(oldIndex, newIndex);
   }
 
   Future<void> removeQueueItemAt(int index) async {
+    _checkAudioHandler();
     return await (audioHandler as AudioPlayerHandler).removeQueueItemIndex(index);
   }
 
   Future<void> customAction(String name) async {
+    _checkAudioHandler();
     return await audioHandler.customAction(name);
   }
 
   Future<void> skipToQueueItem(int index) async {
+    _checkAudioHandler();
     return await audioHandler.skipToQueueItem(index);
   }
 
   void repeat() {
+    _checkAudioHandler();
     repeatButtonNotifier.nextState();
     switch (repeatButtonNotifier.value) {
       case RepeatState.off:
@@ -203,6 +246,7 @@ class PageManager {
   }
 
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+    _checkAudioHandler();
     switch (repeatMode) {
       case AudioServiceRepeatMode.none:
         repeatButtonNotifier.value = RepeatState.off;
@@ -220,6 +264,7 @@ class PageManager {
   }
 
   void shuffle() async {
+    _checkAudioHandler();
     final enabled = !isShuffleModeEnabledNotifier.value;
     isShuffleModeEnabledNotifier.value = enabled;
     audioHandler.setShuffleMode(
@@ -227,26 +272,31 @@ class PageManager {
   }
 
   Future<void> setShuffleMode(AudioServiceShuffleMode value) async {
+    _checkAudioHandler();
     isShuffleModeEnabledNotifier.value = value == AudioServiceShuffleMode.all;
     return await audioHandler.setShuffleMode(value);
   }
 
   Future<void> add(MediaItem item) async {
+    _checkAudioHandler();
     return await audioHandler.addQueueItem(item);
   }
 
   Future<void> adds(List<MediaItem> items, int index) async {
+    _checkAudioHandler();
     if (items.isEmpty) return;
     await (audioHandler as MyAudioHandler).setNewPlaylist(items, index);
   }
 
   void remove() {
+    _checkAudioHandler();
     final last = audioHandler.queue.value.length - 1;
     if (last < 0) return;
     audioHandler.removeQueueItemAt(last);
   }
 
   Future<void> removeAll() async {
+    _checkAudioHandler();
     final last = audioHandler.queue.value.length - 1;
     if (last < 0) return;
     audioHandler.removeQueueItemAt(last);
@@ -264,12 +314,17 @@ class PageManager {
     }
   }
 
-
   void dispose() {
-    audioHandler.customAction('dispose');
+    if (!kIsWeb) {
+      _checkAudioHandler();
+      audioHandler.customAction('dispose');
+    } else {
+      _player.dispose();
+    }
   }
 
   Future<void> stop() async {
+    _checkAudioHandler();
     await audioHandler.stop();
     await audioHandler.seek(Duration.zero);
     currentSongNotifier.value = null;
