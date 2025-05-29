@@ -209,7 +209,7 @@ class SongService {
     }
   }
 
-  /// ✅ ĐÃ CẬP NHẬT: Dùng PUT thay vì POST, và thêm token
+
   static Future<void> increaseShareCount(String songId) async {
     final url = Uri.parse("$baseUrl/songs/$songId/share");
 
@@ -399,7 +399,7 @@ class SongService {
       return [];
     }
   }
-  /// Tìm kiếm bài hát bằng giọng nói (API mới)
+
   static Future<List<Map<String, dynamic>>> searchSongsByVoice({
     required String? token,
     required String query,
@@ -409,7 +409,7 @@ class SongService {
     }
 
     final validToken = checkToken(token);
-    final url = Uri.parse('$baseUrl/search/voice?q=$query'); // ✅ API mới
+    final url = Uri.parse('$baseUrl/search/voice?q=$query');
     final headers = {
       'Authorization': 'Bearer $validToken',
       'Content-Type': 'application/json',

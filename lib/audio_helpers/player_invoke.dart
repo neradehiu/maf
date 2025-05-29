@@ -42,16 +42,26 @@ class PlayerInvoke {
     await updateNPlay(queue, index);
   }
 
-  static Future<void> updateNPlay(List<MediaItem> queue, int index) async {
+  static Future<void> updateNPlay(List<MediaItem>? queue, int index) async {
     try {
+      if (queue == null || index < 0 || index >= queue.length) {
+        debugPrint('⚠️ queue is null or index out of range');
+        return;
+      }
+
+      final mediaItem = queue[index];
+      if (mediaItem == null) {
+        debugPrint('⚠️ mediaItem is null');
+        return;
+      }
+
       await pageManager.setShuffleMode(AudioServiceShuffleMode.none);
       await pageManager.adds(queue, index);
 
-      final mediaItem = queue[index];
       if (kIsWeb) {
         await pageManager.playAS(mediaItem);
       } else {
-        pageManager.play();
+        pageManager.play(); // nhớ dùng await nếu play là async
       }
 
       playerTapTime = DateTime.now();

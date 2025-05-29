@@ -19,7 +19,7 @@ class VoiceSearchService {
     String result = '';
 
     await _speech.listen(
-      localeId: 'vi_VN', // ✅ Lắng nghe tiếng Việt
+      localeId: 'vi_VN',
       onResult: (val) {
         result = val.recognizedWords;
         print('🔊 Đã nhận: $result');
