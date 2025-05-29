@@ -20,7 +20,7 @@ class _AllSongsViewState extends State<AllSongsView> {
   @override
   void initState() {
     super.initState();
-    // Nếu muốn, có thể gọi allVM.fetchAllSongs() lại nếu cần refresh
+// Gọi lại fetchAllSongs nếu cần thiết
   }
 
   @override
@@ -28,7 +28,7 @@ class _AllSongsViewState extends State<AllSongsView> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Obx(
-            () {
+        () {
           if (allVM.isLoading.value) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -54,11 +54,12 @@ class _AllSongsViewState extends State<AllSongsView> {
                 sObj: sObj,
                 isWeb: true,
                 isFavorite: isFavorite,
-
-                /// 👉 Phát nhạc + tăng view qua ViewModel
                 onPressedPlay: () async {
-                  // Lấy playlist dạng List<Map>
                   final playlist = allVM.allList.map((song) {
+                    final rawUrl = song["cloudinaryUrl"] ?? '';
+                    final fixedUrl =
+                        rawUrl.toString().replaceFirst("http://", "https://");
+
                     return {
                       'id': song["id"]?.toString() ?? '',
                       'title': song["title"] ?? '',
@@ -66,35 +67,30 @@ class _AllSongsViewState extends State<AllSongsView> {
                       'album': '',
                       'genre': song["genre"] ?? '',
                       'image': '',
-                      'url': song["cloudinaryUrl"] ?? '',
-                      'user_id': '',
+                      'url': fixedUrl,
+                      'user_id': song["userId"] ?? '',
                       'user_name': song["artist"] ?? '',
+                      'duration': song["duration"] ?? '180',
+                      'language': song["genre"] ?? '',
+                      'album_id': song["album_id"] ?? '',
                     };
                   }).toList();
 
-                  // Tăng lượt xem bài hát
+                  // Tăng lượt xem
                   await allVM.incrementView(songId);
 
                   // Phát nhạc
                   songDeleteService.onPressedPlay(playlist, index);
                 },
-
-                /// 👉 Toggle trạng thái yêu thích
                 onToggleFavorite: () {
                   allVM.toggleFavorite(songId);
                 },
-
-                /// 👉 Thêm yêu thích (nếu muốn dùng riêng)
                 onAddToFavorites: () {
                   allVM.toggleFavorite(songId);
                 },
-
-                /// 👉 Xóa khỏi yêu thích (nếu muốn dùng riêng)
                 onRemoveFromFavorites: () {
                   allVM.toggleFavorite(songId);
                 },
-
-                /// 👉 Xóa bài hát
                 onDelete: () {
                   songDeleteService.deleteSong(sObj);
                 },

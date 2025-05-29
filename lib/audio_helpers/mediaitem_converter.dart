@@ -3,7 +3,7 @@ import 'package:audio_service/audio_service.dart';
 class MediaItemConverter {
   /// Chuyển một Map (song) thành MediaItem, trong đó:
   /// - song['url'] phải là đường dẫn MP3 (đã fix thành HTTPS).
-  /// - song['image'] (nếu có) là đường dẫn hình.
+  /// - song['image'] (nếu có) là đường dẫn hình (đã đổi HTTP → HTTPS nếu cần).
   static MediaItem mapToMediaItem(Map song, {
     bool addedByAutoplay = false,
     bool autoplay = true,
@@ -16,11 +16,16 @@ class MediaItemConverter {
         ? rawUrl.replaceFirst('http://', 'https://')
         : rawUrl;
 
+    // Lấy imageUri nếu có, convert 'http:' thành 'https:' nếu cần
+    String rawImage = (song['image'] as String?) ?? '';
+    final fixedImageUrl =
+    rawImage.startsWith('http://') ? rawImage.replaceFirst('http://', 'https://') : rawImage;
+
     return MediaItem(
       // Quan trọng: id phải là URL MP3, không phải map['id'] (là số)
       id: fixedUrl,
 
-      // Phần thông tin mô tả (dùng đúng các trường backend trả về)
+      // Thông tin mô tả
       album: song['album']?.toString() ?? '',
       artist: song['artist']?.toString() ?? '',
       duration: Duration(
@@ -34,15 +39,14 @@ class MediaItemConverter {
       ),
       title: song['title']?.toString() ?? '',
 
-      // artUri có thể parse thẳng từ 'image', nếu backend trả về link ảnh
-      artUri: Uri.tryParse(
-          song['image']?.toString().replaceAll('http:', 'https:') ?? ''
-      ) ?? Uri(),
-      genre: song['language']?.toString() ?? '',
+      // artUri parse từ 'image' (nếu backend trả về), đã replace http→https
+      artUri: Uri.tryParse(fixedImageUrl) ?? Uri(),
+
+      genre: song['genre']?.toString() ?? '',
 
       extras: {
         'user_id': song['user_id'],
-        'url': fixedUrl,         // Lưu lại URL trong extras, để audio_service non-web cũng dùng
+        'url': fixedUrl,         // Lưu lại URL trong extras, để audio_service non-web dùng
         'album_id': song['album_id'],
         'addedByAutoplay': addedByAutoplay,
         'autoplay': autoplay,
@@ -58,9 +62,9 @@ String getImageUrl(String? imageUrl, {String quality = 'high'}) {
   switch (quality) {
     case 'high':
       return imageUrl.trim()
-      .replaceAll("http:", "https:")
-      .replaceAll("50x50", "500x500")
-      .replaceAll("150x150", "500x500");
+          .replaceAll("http:", "https:")
+          .replaceAll("50x50", "500x500")
+          .replaceAll("150x150", "500x500");
     case 'medium':
       return imageUrl
           .trim()

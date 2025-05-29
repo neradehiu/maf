@@ -25,6 +25,14 @@ class _SearchViewState extends State<SearchView> {
 
   final storage = GetStorage(); // Initialize storage to get token
 
+  /// Helper để chuyển "http://" → "https://"
+  String _ensureHttps(String url) {
+    if (url.startsWith('http://')) {
+      return url.replaceFirst('http://', 'https://');
+    }
+    return url;
+  }
+
   void _performSearch() async {
     final keyword = _controller.text.trim();
     if (keyword.isEmpty) return;
@@ -80,7 +88,6 @@ class _SearchViewState extends State<SearchView> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,35 +128,45 @@ class _SearchViewState extends State<SearchView> {
             onPressed: () {
               // Bấm vào dòng bài hát cũng phát luôn
               final playlist = _results.map((song) {
+                final rawUrl = (song["cloudinaryUrl"] as String?) ?? '';
+                final fixedUrl = _ensureHttps(rawUrl);
                 return {
                   'id': song["id"]?.toString() ?? '',
                   'title': song["title"] ?? '',
                   'artist': song["artist"] ?? '',
                   'album': '',
                   'genre': song["genre"] ?? '',
-                  'image': '',
-                  'url': song["cloudinaryUrl"] ?? '',
-                  'user_id': '',
+                  'image': song["imageUrl"] ?? '',
+                  'url': fixedUrl,            // ✅ URL MP3 (HTTPS)
+                  'user_id': song["user_id"] ?? '',
                   'user_name': song["artist"] ?? '',
                 };
               }).toList();
+
+              // Debug playlist
+              debugPrint("▶️ Playlist truyền vào PlayerInvoke: $playlist");
 
               songDeleteService.onPressedPlay(playlist, index);
             },
             onPressedPlay: () {
               final playlist = _results.map((song) {
+                final rawUrl = (song["cloudinaryUrl"] as String?) ?? '';
+                final fixedUrl = _ensureHttps(rawUrl);
                 return {
                   'id': song["id"]?.toString() ?? '',
                   'title': song["title"] ?? '',
                   'artist': song["artist"] ?? '',
                   'album': '',
                   'genre': song["genre"] ?? '',
-                  'image': '',
-                  'url': song["cloudinaryUrl"] ?? '',
-                  'user_id': '',
+                  'image': song["imageUrl"] ?? '',
+                  'url': fixedUrl,
+                  'user_id': song["user_id"] ?? '',
                   'user_name': song["artist"] ?? '',
                 };
               }).toList();
+
+              // Debug playlist
+              debugPrint("▶️ Playlist truyền vào PlayerInvoke: $playlist");
 
               songDeleteService.onPressedPlay(playlist, index);
             },
