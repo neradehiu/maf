@@ -1,5 +1,3 @@
-// lib/audio_helpers/page_manager.dart
-
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
@@ -56,29 +54,33 @@ class PageManager {
   final isShuffleModeEnabledNotifier = ValueNotifier<bool>(false);
 
   // Underlying player or handler
-  late final AudioPlayer _player;         // just_audio on Web
-  late final dynamic audioHandler;        // AudioHandler trên non-web
+  AudioPlayer? _player; // just_audio dùng cho Web
+  AudioPlayerHandler? audioHandler; // audio_service dùng cho non-Web
+
+  // Đặc thù cho Web: giữ playlist dạng MediaItem và index đang phát
+  List<MediaItem> webPlaylist = [];
+  int webIndex = 0;
 
   PageManager() {
     if (kIsWeb) {
-      // Web: chỉ sử dụng just_audio
+      // Web: chỉ khởi tạo just_audio
       _player = AudioPlayer();
       audioHandler = null;
       _initWebListeners();
     } else {
-      // Mobile/Desktop: audio_service + just_audio
+      // Mobile/Desktop: audio_service
       try {
-        audioHandler = getIt<AudioHandler>();
-        _player = AudioPlayer(); // _player sẽ không dùng nhưng khởi tạo cho an toàn
+        audioHandler = getIt<AudioHandler>() as AudioPlayerHandler;
+        _player = null;
       } catch (e) {
         throw Exception(
-          "Bạn cần gọi setupServiceLocator() trước khi khởi tạo PageManager.\nChi tiết: $e",
+          "audioHandler chưa được khởi tạo. Bạn cần gọi setupServiceLocator() trước.\nChi tiết: $e",
         );
       }
     }
   }
 
-  /// Chỉ gọi trên non-web để gắn listener của audio_service
+  /// Chỉ gọi trên non-web để gắn các listener của audio_service
   void init() {
     if (kIsWeb) return;
     _listenToChangeInPlaylist();
@@ -95,12 +97,12 @@ class PageManager {
 
   void _initWebListeners() {
     // Play/pause state
-    _player.playbackEventStream.listen((_) {
+    _player!.playbackEventStream.listen((_) {
       playButtonNotifier.value =
-      _player.playing ? ButtonState.playing : ButtonState.paused;
+      _player!.playing ? ButtonState.playing : ButtonState.paused;
     });
-    // Stream vị trí hiện tại
-    _player.positionStream.listen((pos) {
+    // Dòng vị trí hiện tại
+    _player!.positionStream.listen((pos) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
         current: pos,
@@ -108,8 +110,8 @@ class PageManager {
         total: old.total,
       );
     });
-    // Stream vị trí đã buffer
-    _player.bufferedPositionStream.listen((buffered) {
+    // Dòng vị trí đã buffer
+    _player!.bufferedPositionStream.listen((buffered) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
         current: old.current,
@@ -117,8 +119,8 @@ class PageManager {
         total: old.total,
       );
     });
-    // Stream tổng độ dài (duration)
-    _player.durationStream.listen((duration) {
+    // Dòng tổng độ dài (duration)
+    _player!.durationStream.listen((duration) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
         current: old.current,
@@ -134,7 +136,7 @@ class PageManager {
 
   void _listenToChangeInPlaylist() {
     _checkAudioHandler();
-    audioHandler.queue.listen((playlist) {
+    audioHandler!.queue.listen((playlist) {
       playlistNotifier.value = playlist;
       _updateSkipButton();
     });
@@ -142,8 +144,8 @@ class PageManager {
 
   void _updateSkipButton() {
     _checkAudioHandler();
-    final mediaItem = audioHandler.mediaItem.value;
-    final playlist = audioHandler.queue.value;
+    final mediaItem = audioHandler!.mediaItem.value;
+    final playlist = audioHandler!.queue.value;
     if (playlist.isEmpty || mediaItem == null) {
       isFirstSongNotifier.value = true;
       isLastSongNotifier.value = true;
@@ -155,7 +157,7 @@ class PageManager {
 
   void _listenToPlayBackState() {
     _checkAudioHandler();
-    audioHandler.playbackState.listen((state) {
+    audioHandler!.playbackState.listen((state) {
       playbackStatNotifier.value = state.processingState;
       if (state.processingState == AudioProcessingState.loading ||
           state.processingState == AudioProcessingState.buffering) {
@@ -165,8 +167,8 @@ class PageManager {
       } else if (state.processingState != AudioProcessingState.completed) {
         playButtonNotifier.value = ButtonState.playing;
       } else {
-        audioHandler.seek(Duration.zero);
-        audioHandler.pause();
+        audioHandler!.seek(Duration.zero);
+        audioHandler!.pause();
       }
     });
   }
@@ -184,7 +186,7 @@ class PageManager {
 
   void _listenToBufferedPosition() {
     _checkAudioHandler();
-    audioHandler.playbackState.listen((state) {
+    audioHandler!.playbackState.listen((state) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
         current: old.current,
@@ -196,7 +198,7 @@ class PageManager {
 
   void _listenToTotalPosition() {
     _checkAudioHandler();
-    audioHandler.mediaItem.listen((mediaItem) {
+    audioHandler!.mediaItem.listen((mediaItem) {
       final old = progressNotifier.value;
       progressNotifier.value = ProgressBarState(
         current: old.current,
@@ -208,7 +210,7 @@ class PageManager {
 
   void _listenToChangesInSong() {
     _checkAudioHandler();
-    audioHandler.mediaItem.listen((mediaItem) {
+    audioHandler!.mediaItem.listen((mediaItem) {
       currentSongNotifier.value = mediaItem;
       _updateSkipButton();
     });
@@ -225,151 +227,212 @@ class PageManager {
     }
   }
 
+  // Cập nhật trạng thái nút Previous/Next trên Web
+  void _updateWebSkipButtons() {
+    if (webPlaylist.isEmpty) {
+      isFirstSongNotifier.value = true;
+      isLastSongNotifier.value = true;
+    } else {
+      isFirstSongNotifier.value = (webIndex == 0);
+      isLastSongNotifier.value = (webIndex == webPlaylist.length - 1);
+    }
+  }
+
   //===========================================================================
   // Controls (common)
   //===========================================================================
 
   /// Play (non-web)
   void play() {
-    _checkAudioHandler();
-    audioHandler.play();
+    if (kIsWeb) {
+      _player!.play();
+    } else {
+      _checkAudioHandler();
+      audioHandler!.play();
+    }
   }
 
-  /// Pause (non-web)
+  /// Pause
   void pause() {
-    _checkAudioHandler();
-    audioHandler.pause();
+    if (kIsWeb) {
+      _player!.pause();
+    } else {
+      _checkAudioHandler();
+      audioHandler!.pause();
+    }
   }
 
-  /// Seek to [position] (non-web)
+  /// Seek to [position]
   void seek(Duration position) {
-    _checkAudioHandler();
-    audioHandler.seek(position);
+    if (kIsWeb) {
+      _player!.seek(position);
+    } else {
+      _checkAudioHandler();
+      audioHandler!.seek(position);
+    }
   }
 
-  /// Previous track (non-web)
-  void previous() {
-    _checkAudioHandler();
-    audioHandler.skipToPrevious();
-  }
-
-  /// Next track (non-web)
-  void next() {
-    _checkAudioHandler();
-    audioHandler.skipToNext();
-  }
-
-  /// Stop playback, clear queue (non-web)
+  /// Stop playback, clear queue
   Future<void> stop() async {
     if (kIsWeb) {
-      // Nếu Web, chỉ dừng player của just_audio, set lại currentSong null
-      await _player.stop();
-      await _player.seek(Duration.zero);
+      await _player!.stop();
+      await _player!.seek(Duration.zero);
       currentSongNotifier.value = null;
       return;
     }
 
     _checkAudioHandler();
-    await audioHandler.stop();
-    await audioHandler.seek(Duration.zero);
+    await audioHandler!.stop();
+    await audioHandler!.seek(Duration.zero);
     currentSongNotifier.value = null;
     await removeAll();
     await Future.delayed(const Duration(milliseconds: 300));
   }
 
-  Future<void> setShuffleMode(AudioServiceShuffleMode value) async {
-    if (kIsWeb) return; // Trên Web không dùng
-    isShuffleModeEnabledNotifier.value = value == AudioServiceShuffleMode.all;
-    return await audioHandler.setShuffleMode(value);
+  /// Previous track
+  void previous() {
+    if (kIsWeb) {
+      if (webPlaylist.isEmpty) return;
+      webIndex = (webIndex - 1).clamp(0, webPlaylist.length - 1);
+      _playCurrentWebItem();
+      _updateWebSkipButtons();
+    } else {
+      _checkAudioHandler();
+      audioHandler!.skipToPrevious();
+    }
   }
 
-  /// Add một item (non-web)
+  /// Next track
+  void next() {
+    if (kIsWeb) {
+      if (webPlaylist.isEmpty) return;
+      webIndex = (webIndex + 1).clamp(0, webPlaylist.length - 1);
+      _playCurrentWebItem();
+      _updateWebSkipButtons();
+    } else {
+      _checkAudioHandler();
+      audioHandler!.skipToNext();
+    }
+  }
+
+  /// Set shuffle mode (non-web)
+  Future<void> setShuffleMode(AudioServiceShuffleMode value) async {
+    if (kIsWeb) return;
+    isShuffleModeEnabledNotifier.value = value == AudioServiceShuffleMode.all;
+    return await audioHandler!.setShuffleMode(value);
+  }
+
+  /// Add a single item (non-web)
   Future<void> add(MediaItem item) async {
     if (kIsWeb) return;
     _checkAudioHandler();
-    await audioHandler.addQueueItem(item);
+    await audioHandler!.addQueueItem(item);
   }
 
-  /// Add nhiều item, bắt đầu từ [index] (non-web)
+  /// Add multiple, bắt đầu từ [index] (non-web)
   Future<void> adds(List<MediaItem> items, int index) async {
     if (kIsWeb) return;
     _checkAudioHandler();
     if (items.isEmpty) return;
-    await (audioHandler as MyAudioHandler).setNewPlaylist(items, index);
+    await (audioHandler as AudioPlayerHandler).setNewPlaylist(items, index);
   }
 
-  /// Cập nhật queue (non-web)
+  /// Update queue wholesale (non-web)
   Future<void> updateQueue(List<MediaItem> queue) async {
     if (kIsWeb) return;
     _checkAudioHandler();
-    await audioHandler.updateQueue(queue);
+    await audioHandler!.updateQueue(queue);
   }
 
   Future<void> skipToQueueItem(int index) async {
     if (kIsWeb) return;
     _checkAudioHandler();
-    return await audioHandler.skipToQueueItem(index);
+    return await audioHandler!.skipToQueueItem(index);
   }
 
-  /// Cập nhật MediaItem (non-web)
+  /// Update single MediaItem (non-web)
   Future<void> updateMediaItem(MediaItem item) async {
     if (kIsWeb) return;
     _checkAudioHandler();
-    await audioHandler.updateMediaItem(item);
+    await audioHandler!.updateMediaItem(item);
   }
 
-  /// Di chuyển item (non-web)
+  /// Move item in queue (non-web)
   Future<void> moveMediaItem(int oldIndex, int newIndex) async {
     if (kIsWeb) return;
     _checkAudioHandler();
-    await (audioHandler as AudioPlayerHandler)
-        .moveQueueItem(oldIndex, newIndex);
+    await (audioHandler as AudioPlayerHandler).moveQueueItem(oldIndex, newIndex);
   }
 
-  /// Xóa item tại [index] (non-web)
+  /// Remove at [index] (non-web)
   Future<void> removeQueueItemAt(int index) async {
     if (kIsWeb) return;
     _checkAudioHandler();
     await (audioHandler as AudioPlayerHandler).removeQueueItemIndex(index);
   }
 
-  /// Xóa item cuối (non-web)
+  /// Remove last item (non-web)
   void remove() {
     if (kIsWeb) return;
     _checkAudioHandler();
-    final last = audioHandler.queue.value.length - 1;
+    final last = audioHandler!.queue.value.length - 1;
     if (last < 0) return;
-    audioHandler.removeQueueItemAt(last);
+    audioHandler!.removeQueueItemAt(last);
   }
 
-  /// Xóa tất cả (non-web)
+  /// Clear all (non-web)
   Future<void> removeAll() async {
     if (kIsWeb) return;
     _checkAudioHandler();
-    final last = audioHandler.queue.value.length - 1;
+    final last = audioHandler!.queue.value.length - 1;
     if (last < 0) return;
-    audioHandler.removeQueueItemAt(last);
+    audioHandler!.removeQueueItemAt(last);
   }
 
   //===========================================================================
   // Web playback
   //===========================================================================
 
-  /// Play một MediaItem trên Web
-  Future<void> playAS(MediaItem mediaItem) async {
+  /// Play a MediaItem (Web). Nếu có playlist + startIndex, lưu lại
+  Future<void> playAS(
+      MediaItem mediaItem, {
+        List<MediaItem>? playlist,
+        int? startIndex,
+      }) async {
     if (!kIsWeb) return;
 
-    // Thêm debug log để biết URL đang play
-    print("🟢 [PageManager.playAS] Web đang play URL = ${mediaItem.id}");
+    // Nếu truyền playlist cùng index, cập nhật webPlaylist/webIndex
+    if (playlist != null && startIndex != null) {
+      webPlaylist = playlist;
+      webIndex = startIndex.clamp(0, playlist.length - 1);
+    }
+
+    // Nếu chưa có webPlaylist, chỉ play một item
+    if (webPlaylist.isEmpty) {
+      webPlaylist = [mediaItem];
+      webIndex = 0;
+    }
 
     try {
-      await _player.setUrl(mediaItem.id);
-      currentSongNotifier.value = mediaItem;
-      await _player.play();
-      print("🟢 [PageManager.playAS] Đã play thành công!");
+      final url = webPlaylist[webIndex].id;
+      await _player!.setUrl(url);
+      currentSongNotifier.value = webPlaylist[webIndex];
+      await _player!.play();
+      // Cập nhật trạng thái nút Previous/Next
+      _updateWebSkipButtons();
     } catch (e) {
-      print("🔴 [PageManager.playAS] Lỗi khi playAS trên Web: $e");
+      print('Lỗi khi playAS trên Web: $e');
     }
+  }
+
+  /// Phát lại item hiện tại (Web, nội bộ)
+  void _playCurrentWebItem() {
+    final current = webPlaylist[webIndex];
+    playAS(
+      current,
+      playlist: webPlaylist,
+      startIndex: webIndex,
+    );
   }
 
   //===========================================================================
@@ -378,10 +441,10 @@ class PageManager {
 
   void dispose() {
     if (kIsWeb) {
-      _player.dispose();
+      _player!.dispose();
     } else {
       _checkAudioHandler();
-      audioHandler.customAction('dispose');
+      audioHandler!.customAction('dispose');
     }
   }
 }

@@ -73,7 +73,7 @@ class _SearchViewState extends State<SearchView> {
       try {
         setState(() => _loading = true);
 
-        String query = await _voiceService.listen(timeoutSec: 8); // ✅ Gọi với thời gian chờ rõ ràng
+        String query = await _voiceService.listen(timeoutSec: 8);
         _controller.text = query;
         print('🎤 Kết quả sau giọng nói: $query');
 
@@ -137,7 +137,7 @@ class _SearchViewState extends State<SearchView> {
                   'album': '',
                   'genre': song["genre"] ?? '',
                   'image': song["imageUrl"] ?? '',
-                  'url': fixedUrl,            // ✅ URL MP3 (HTTPS)
+                  'url': fixedUrl,
                   'user_id': song["user_id"] ?? '',
                   'user_name': song["artist"] ?? '',
                 };

@@ -1,5 +1,3 @@
-// lib/view/main_player/main_player_view.dart
-
 import 'dart:math';
 import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:audio_service/audio_service.dart';
@@ -18,11 +16,11 @@ import 'package:music_player/view/main_player/driver_mode_view.dart';
 import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
 /// MainPlayerView bao gồm 2 phần chính:
-/// - Phần hiển thị Player (artwork, progress, controls)
-/// - Phần list bài hát để người dùng chọn
+/// - Hiển thị Player (artwork, progress, controls)
+/// - List bài hát để người dùng chọn
 ///
-/// allSongsList là List<Map> chứa dữ liệu bài hát từ API.
-/// Nếu không truyền vào, mặc định nó sẽ là List rỗng.
+/// allSongsList: List<Map> dữ liệu bài hát từ API. Mỗi map gồm
+///   id (số, string), title, artist, cloudinaryUrl (url MP3), imageUrl, album, genre, duration, user_id, album_id, v.v.
 class MainPlayerView extends StatefulWidget {
   final List<Map<String, dynamic>> allSongsList;
 
@@ -45,10 +43,26 @@ class _MainPlayerViewState extends State<MainPlayerView> {
     super.initState();
     pageManager = getIt<PageManager>();
     pageManager.init();
+
     final mediaItem = pageManager.currentSongNotifier.value;
     if (mediaItem != null) {
-      _loadShareCount(mediaItem.id);
+      // Lấy ID số từ extras để load shareCount
+      final idNumber = mediaItem.extras?['songId']?.toString() ?? '';
+      if (idNumber.isNotEmpty) {
+        _loadShareCount(idNumber);
+      }
     }
+
+    // Lắng nghe mỗi khi bài hát thay đổi => cập nhật shareCount cho bài mới
+    pageManager.currentSongNotifier.addListener(() {
+      final cur = pageManager.currentSongNotifier.value;
+      if (cur != null) {
+        final idNumber = cur.extras?['songId']?.toString() ?? '';
+        if (idNumber.isNotEmpty) {
+          _loadShareCount(idNumber);
+        }
+      }
+    });
   }
 
   void _loadShareCount(String songId) async {
@@ -72,255 +86,389 @@ class _MainPlayerViewState extends State<MainPlayerView> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final media = MediaQuery.of(context).size;
+    final pageManager = getIt<PageManager>();
 
-    return Scaffold(
-      backgroundColor: TColor.bg,
-      appBar: AppBar(
-        backgroundColor: TColor.bg,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Get.back(),
-          icon: Image.asset("assets/img/back.png", width: 25, height: 25),
-        ),
-        title: Text(
-          "Now Playing",
-          style: TextStyle(
-            color: TColor.primaryText80,
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
+    return Dismissible(
+      key: const Key("playScreen"),
+      direction: DismissDirection.down,
+      background: const ColoredBox(color: Colors.transparent),
+      onDismissed: (direction) {
+        Get.back();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: TColor.bg,
+          elevation: 0,
+          leading: IconButton(
+            onPressed: () => Get.back(),
+            icon: Image.asset("assets/img/back.png", width: 25, height: 25),
           ),
-        ),
-      ),
-      body: Column(
-        children: [
-          // Nếu currentSongNotifier null → hiển thị hướng dẫn hoặc text
-          Expanded(
-            child: ValueListenableBuilder<MediaItem?>(
-              valueListenable: pageManager.currentSongNotifier,
-              builder: (context, mediaItem, _) {
-                if (mediaItem == null) {
-                  return Center(
-                    child: Text("Chưa có bài nào được chọn",
-                        style: TextStyle(color: TColor.primaryText)),
-                  );
+          title: Text(
+            "Now Playing",
+            style: TextStyle(
+              color: TColor.primaryText80,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          actions: [
+            PopupMenuButton<int>(
+              color: const Color(0xff383B49),
+              offset: const Offset(-10, 15),
+              elevation: 1,
+              icon: Image.asset(
+                "assets/img/more_btn.png",
+                width: 20,
+                height: 20,
+                color: Colors.white,
+              ),
+              onSelected: (selectIndex) {
+                switch (selectIndex) {
+                  case 1:
+                    Share.share(
+                      'Listening to ${pageManager.currentSongNotifier.value?.title}',
+                    );
+                    break;
+                  case 2:
+                    openPlayPlaylistQueue();
+                    break;
+                  case 9:
+                    openDriverModel();
+                    break;
                 }
-                return _buildPlayerContent(context, size, mediaItem);
               },
-            ),
-          ),
-
-          const Divider(color: Colors.grey, height: 1),
-
-          // ListView các bài hát (dùng trực tiếp widget.allSongsList)
-          Expanded(
-            child: ListView.builder(
-              itemCount: widget.allSongsList.length,
-              itemBuilder: (context, index) {
-                final songMap = widget.allSongsList[index];
-                final rawUrl = (songMap["cloudinaryUrl"] as String?) ?? '';
-                final fixedUrl = _ensureHttps(rawUrl);
-
-                return ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: CachedNetworkImage(
-                      imageUrl: songMap["imageUrl"] ?? '',
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => const SizedBox(),
-                      errorWidget: (_, __, ___) =>
-                      const Icon(Icons.music_note),
-                    ),
-                  ),
-                  title: Text(
-                    songMap["title"] ?? "",
-                    style: TextStyle(color: TColor.primaryText),
-                  ),
-                  subtitle: Text(
-                    songMap["artist"] ?? "",
-                    style: TextStyle(color: TColor.primaryText35),
-                  ),
-                  trailing: IconButton(
-                    icon: Icon(
-                      Icons.play_circle_fill,
-                      color: TColor.primaryText,
-                    ),
-                    onPressed: () {
-                      // Khi user bấm play 1 bài, dựng playlist từ allSongsList
-                      final playlist = widget.allSongsList.map((song) {
-                        return {
-                          'id': (song["id"]?.toString() ?? ''),
-                          'title': song["title"] ?? '',
-                          'artist': song["artist"] ?? '',
-                          'url': _ensureHttps(song["cloudinaryUrl"] ?? ''),
-                          // thêm nếu cần album, genre, v.v.
-                        };
-                      }).toList();
-
-                      debugPrint("▶️ Đang play bài index = $index");
-                      debugPrint("▶️ Playlist = $playlist");
-
-                      songDeleteService.onPressedPlay(playlist, index);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlayerContent(
-      BuildContext context, Size size, MediaItem mediaItem) {
-    String formatDuration(Duration duration) {
-      final match = RegExp(r'((^0*[1-9]\d*:)?\d{2}:\d{2})\.\d+$')
-          .firstMatch(duration.toString());
-      return match?.group(1) ?? duration.toString();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Column(
-        children: [
-          // ------- Artwork -------
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: CachedNetworkImage(
-              imageUrl: mediaItem.extras?['image'] ?? '',
-              width: size.width * 0.8,
-              height: size.width * 0.8,
-              fit: BoxFit.cover,
-              placeholder: (_, __) => const SizedBox(),
-              errorWidget: (_, __, ___) =>
-              const Icon(Icons.music_note, size: 80),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ------- Progress slider -------
-          ValueListenableBuilder<ProgressBarState>(
-            valueListenable: pageManager.progressNotifier,
-            builder: (_, progress, __) => SleekCircularSlider(
-              min: 0,
-              max: progress.total.inMilliseconds.toDouble(),
-              initialValue: progress.current.inMilliseconds.toDouble(),
-              onChangeEnd: (value) {
-                pageManager.seek(Duration(milliseconds: value.toInt()));
-              },
-              innerWidget: (_) => Center(
-                child: Text(
-                  "${formatDuration(progress.current)} / ${formatDuration(progress.total)}",
-                  style: TextStyle(color: TColor.primaryText, fontSize: 12),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 1,
+                  child: Text("Social Share", style: TextStyle(fontSize: 12)),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ------- Play controls -------
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ValueListenableBuilder<bool>(
-                valueListenable: pageManager.isFirstSongNotifier,
-                builder: (_, isFirst, __) => IconButton(
-                  icon: Image.asset(
-                    "assets/img/previous_song.png",
-                    color: isFirst
-                        ? TColor.primaryText35
-                        : TColor.primaryText,
-                  ),
-                  onPressed: isFirst ? null : pageManager.previous,
+                const PopupMenuItem(
+                  value: 2,
+                  child: Text("Playing Queue", style: TextStyle(fontSize: 12)),
                 ),
-              ),
-              const SizedBox(width: 15),
-              ValueListenableBuilder<ButtonState>(
-                valueListenable: pageManager.playButtonNotifier,
-                builder: (_, buttonState, __) {
-                  if (buttonState == ButtonState.loading)
-                    return const CircularProgressIndicator();
-                  return InkWell(
-                    onTap: () {
-                      if (buttonState == ButtonState.playing) {
-                        pageManager.pause();
-                      } else {
-                        if (kIsWeb) {
-                          final current =
-                              pageManager.currentSongNotifier.value;
-                          if (current != null) {
-                            pageManager.playAS(current);
-                          }
-                        } else {
-                          pageManager.play();
+                const PopupMenuItem(
+                  value: 3,
+                  child: Text("Add to playlist...", style: TextStyle(fontSize: 12)),
+                ),
+                const PopupMenuItem(
+                  value: 4,
+                  child: Text("Lyrics", style: TextStyle(fontSize: 12)),
+                ),
+                const PopupMenuItem(
+                  value: 5,
+                  child: Text("Volume", style: TextStyle(fontSize: 12)),
+                ),
+                const PopupMenuItem(
+                  value: 6,
+                  child: Text("Details", style: TextStyle(fontSize: 12)),
+                ),
+                const PopupMenuItem(
+                  value: 7,
+                  child: Text("Sleep timer", style: TextStyle(fontSize: 12)),
+                ),
+                const PopupMenuItem(
+                  value: 8,
+                  child: Text("Equaliser", style: TextStyle(fontSize: 12)),
+                ),
+                const PopupMenuItem(
+                  value: 9,
+                  child: Text("Driver mode", style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: ValueListenableBuilder<MediaItem?>(
+          valueListenable: pageManager.currentSongNotifier,
+          builder: (context, mediaItem, _) {
+            if (mediaItem == null) return const SizedBox();
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    // Artwork + Circular Slider
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Hero(
+                          tag: "currentArtWork",
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(media.width * 0.7),
+                            child: CachedNetworkImage(
+                              imageUrl: mediaItem.artUri.toString(),
+                              width: media.width * 0.6,
+                              height: media.width * 0.6,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) =>
+                                  Image.asset("assets/img/cover.jpg"),
+                              placeholder: (_, __) =>
+                                  Image.asset("assets/img/cover.jpg"),
+                            ),
+                          ),
+                        ),
+                        ValueListenableBuilder<ProgressBarState>(
+                          valueListenable: pageManager.progressNotifier,
+                          builder: (context, progress, _) {
+                            final double value = min(
+                              progress.current.inMilliseconds.toDouble(),
+                              progress.total.inMilliseconds.toDouble(),
+                            );
+                            return SizedBox(
+                              width: media.width * 0.61,
+                              height: media.width * 0.61,
+                              child: SleekCircularSlider(
+                                appearance: CircularSliderAppearance(
+                                  customWidths: CustomSliderWidths(
+                                      trackWidth: 4,
+                                      progressBarWidth: 6,
+                                      shadowWidth: 8),
+                                  customColors: CustomSliderColors(
+                                    dotColor: const Color(0xffFFB1B2),
+                                    trackColor: Colors.white.withOpacity(0.3),
+                                    progressBarColors: [
+                                      const Color(0xffFB9967),
+                                      const Color(0xffE9585A)
+                                    ],
+                                    shadowColor: const Color(0xffFFB1B2),
+                                    shadowMaxOpacity: 0.05,
+                                  ),
+                                  infoProperties: InfoProperties(
+                                    mainLabelStyle:
+                                    const TextStyle(color: Colors.transparent),
+                                  ),
+                                  startAngle: 270,
+                                  angleRange: 360,
+                                  size: 350.0,
+                                ),
+                                min: 0,
+                                max: progress.total.inMilliseconds.toDouble(),
+                                initialValue: value,
+                                onChange: (val) {
+                                  pageManager.seek(Duration(milliseconds: val.round()));
+                                },
+                                onChangeEnd: (val) {
+                                  pageManager.seek(Duration(milliseconds: val.round()));
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Hiển thị thời gian hiện tại và tổng
+                    ValueListenableBuilder<ProgressBarState>(
+                      valueListenable: pageManager.progressNotifier,
+                      builder: (context, progress, _) {
+                        String formatDuration(Duration duration) {
+                          final match = RegExp(r'((^0*[1-9]\d*:)?\d{2}:\d{2})\.\d+$')
+                              .firstMatch(duration.toString());
+                          return match?.group(1) ?? duration.toString();
                         }
-                      }
-                    },
-                    child: Image.asset(
-                      buttonState == ButtonState.playing
-                          ? "assets/img/pause.png"
-                          : "assets/img/play.png",
-                      width: 60,
-                      height: 60,
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 15),
-              ValueListenableBuilder<bool>(
-                valueListenable: pageManager.isLastSongNotifier,
-                builder: (_, isLast, __) => IconButton(
-                  icon: Image.asset("assets/img/next_song.png",
-                      color: isLast
-                          ? TColor.primaryText35
-                          : TColor.primaryText),
-                  onPressed: isLast ? null : pageManager.next,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
 
-          // ------- Bottom actions: Share, Favorite, Queue -------
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              PlayerBottomButton(
-                title: 'Favorite',
-                icon: 'assets/img/favorite.png',
-                onPressed: () {}, // TODO: toggle favorite
-              ),
-              Row(
-                children: [
-                  PlayerBottomButton(
-                    title: 'Share',
-                    icon: 'assets/img/share.png',
-                    onPressed: () =>
-                        Share.share('Listening to ${mediaItem.title}'),
-                  ),
-                  const SizedBox(width: 4),
-                  Text('$_shareCount',
-                      style: TextStyle(color: TColor.primaryText)),
-                ],
-              ),
-              PlayerBottomButton(
-                title: 'Queue',
-                icon: 'assets/img/playlist.png',
-                onPressed: () => Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    opaque: false,
-                    pageBuilder: (_, __, ___) => const PlayPlayListView(),
-                  ),
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              formatDuration(progress.current),
+                              style: TextStyle(
+                                  color: TColor.secondaryText, fontSize: 12),
+                            ),
+                            const Text(" | "),
+                            Text(
+                              formatDuration(progress.total),
+                              style: TextStyle(
+                                  color: TColor.secondaryText, fontSize: 12),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 25),
+                    // Tiêu đề & ca sĩ
+                    Text(
+                      mediaItem.title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: TColor.primaryText.withOpacity(0.9),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "${mediaItem.artist} • Album - ${mediaItem.album}",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: TColor.secondaryText, fontSize: 12),
+                    ),
+                    const SizedBox(height: 20),
+                    Image.asset("assets/img/eq_display.png",
+                        height: 60, fit: BoxFit.fitHeight),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Divider(color: Colors.white12),
+                    ),
+                    // Các nút điều khiển (previous / play‑pause / next)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ValueListenableBuilder<bool>(
+                          valueListenable: pageManager.isFirstSongNotifier,
+                          builder: (_, isFirst, __) => IconButton(
+                            icon: Image.asset(
+                              "assets/img/previous_song.png",
+                              color:
+                              isFirst ? TColor.primaryText35 : TColor.primaryText,
+                            ),
+                            onPressed: isFirst ? null : pageManager.previous,
+                          ),
+                        ),
+                        const SizedBox(width: 15),
+                        ValueListenableBuilder<ButtonState>(
+                          valueListenable: pageManager.playButtonNotifier,
+                          builder: (_, buttonState, __) {
+                            if (buttonState == ButtonState.loading) {
+                              return const CircularProgressIndicator();
+                            }
+
+                            return InkWell(
+                              onTap: () {
+                                if (buttonState == ButtonState.playing) {
+                                  pageManager.pause();
+                                } else {
+                                  // Chỉ gọi play() vì webPlaylist đã set khi nhấn Play bên dưới
+                                  pageManager.play();
+                                }
+                              },
+                              child: Image.asset(
+                                buttonState == ButtonState.playing
+                                    ? "assets/img/pause.png"
+                                    : "assets/img/play.png",
+                                width: 60,
+                                height: 60,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 15),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: pageManager.isLastSongNotifier,
+                          builder: (_, isLast, __) => IconButton(
+                            icon: Image.asset(
+                              "assets/img/next_song.png",
+                              color:
+                              isLast ? TColor.primaryText35 : TColor.primaryText,
+                            ),
+                            onPressed: isLast ? null : pageManager.next,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // Các nút phụ trợ: Playlist, Shuffle, Repeat, EQ, Share
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Playlist
+                        IconButton(
+                          icon: Image.asset("assets/img/playlist.png"),
+                          onPressed: () {
+                            openPlayPlaylistQueue();
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        // Shuffle
+                        IconButton(
+                          icon: Image.asset("assets/img/shuffle.png"),
+                          onPressed: () {
+                            // TODO: implement shuffle
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        // Repeat
+                        IconButton(
+                          icon: Image.asset("assets/img/repeat.png"),
+                          onPressed: () {
+                            // TODO: implement repeat
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        // EQ
+                        IconButton(
+                          icon: Image.asset("assets/img/eq.png"),
+                          onPressed: () {
+                            // TODO: implement EQ
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        // Share
+                        Column(
+                          children: [
+                            PlayerBottomButton(
+                              title: "Share",
+                              icon: "assets/img/share1.png",
+                              onPressed: () async {
+                                final title = mediaItem.title;
+                                // Lấy ID số thực từ extras
+                                final songId =
+                                    mediaItem.extras?['songId']?.toString() ?? '';
+
+                                print("📤 Share button clicked for songId: $songId");
+
+                                try {
+                                  // Lấy token (nếu cần)
+                                  final token = await SongService.getToken();
+
+                                  // Gửi tăng share count
+                                  await SongService.increaseShareCount(songId);
+
+                                  // Lấy lại shareCount mới
+                                  final updatedCount =
+                                  await SongService.getShareCount(songId);
+
+                                  // Cập nhật UI
+                                  setState(() {
+                                    _shareCount = updatedCount;
+                                  });
+
+                                  // Lấy share link (nếu có)
+                                  final shareUrl =
+                                  await SongService.getShareLink(songId, token);
+
+                                  final message = (shareUrl != null &&
+                                      shareUrl.isNotEmpty)
+                                      ? "🎧 Listening to $title:\n$shareUrl"
+                                      : "🎧 Listening to $title";
+
+                                  // Gọi dialog share
+                                  Share.share(message);
+                                } catch (e) {
+                                  debugPrint("❌ Error sharing song: $e");
+                                  // Fallback: chỉ share text
+                                  Share.share("🎧 Listening to $title");
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$_shareCount shares',
+                              style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
-        ],
+            );
+          },
+        ),
       ),
     );
   }

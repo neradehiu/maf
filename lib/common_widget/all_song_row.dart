@@ -5,6 +5,7 @@ class AllSongRow extends StatelessWidget {
   final Map sObj;
   final bool isWeb;
   final bool isFavorite;
+  final bool isLiked;
   final VoidCallback onPressedPlay;
   final VoidCallback onDelete;
   final VoidCallback onToggleFavorite;
@@ -16,6 +17,7 @@ class AllSongRow extends StatelessWidget {
     required this.sObj,
     this.isWeb = false,
     required this.isFavorite,
+    required this.isLiked,
     required this.onPressedPlay,
     required this.onDelete,
     required this.onToggleFavorite,
@@ -136,18 +138,19 @@ class AllSongRow extends StatelessWidget {
               ),
               tooltip: "Phát nhạc",
             ),
-            // Nút Like / Unlike
+
+            // Nút Like (độc lập)
             IconButton(
               onPressed: onToggleFavorite,
               icon: Icon(
-                isFavorite ? Icons.thumb_up : Icons.thumb_up_off_alt,
-                color: isFavorite ? Colors.blueAccent : Colors.grey,
+                isLiked ? Icons.thumb_up : Icons.thumb_up_off_alt,
+                color: isLiked ? Colors.blueAccent : Colors.grey,
                 size: 24,
               ),
-              tooltip: isFavorite ? "Bỏ Like" : "Like",
+              tooltip: isLiked ? "Bỏ Like" : "Like",
             ),
 
-            // Menu
+            // Menu (Favorite, Delete)
             Theme(
               data: Theme.of(context).copyWith(
                 popupMenuTheme: PopupMenuThemeData(
@@ -170,8 +173,8 @@ class AllSongRow extends StatelessWidget {
                     child: Row(
                       children: [
                         Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: Colors.pinkAccent,
+                          isFavorite ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
                           size: 24,
                         ),
                         const SizedBox(width: 10),

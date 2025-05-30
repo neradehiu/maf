@@ -12,9 +12,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Khởi tạo GetStorage
-  await GetStorage.init();  // Đảm bảo khởi tạo GetStorage trước khi chạy ứng dụng
+  await GetStorage.init();
 
-  await setupServiceLocator(); // Khởi tạo các service khác nếu cần
+  await setupServiceLocator();
   runApp(const MyApp());
 }
 
@@ -55,11 +55,11 @@ class _MyAppState extends State<MyApp> {
         ),
         useMaterial3: false,
       ),
-      initialRoute: '/login',  // Trang khởi đầu là login
+      initialRoute: '/login',
       getPages: [
         GetPage(name: '/login', page: () => const LoginView()),
         GetPage(name: '/register', page: () => const RegisterView()),
-        GetPage(name: '/splash', page: () => const SplashView()), // tùy bạn sử dụng sau khi login
+        GetPage(name: '/splash', page: () => const SplashView()),
       ],
     );
   }

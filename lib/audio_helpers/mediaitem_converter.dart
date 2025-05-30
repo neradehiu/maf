@@ -1,31 +1,34 @@
+// lib/audio_helpers/mediaitem_converter.dart
+
 import 'package:audio_service/audio_service.dart';
 
 class MediaItemConverter {
-  /// Chuyển một Map (song) thành MediaItem, trong đó:
-  /// - song['url'] phải là đường dẫn MP3 (đã fix thành HTTPS).
-  /// - song['image'] (nếu có) là đường dẫn hình (đã đổi HTTP → HTTPS nếu cần).
-  static MediaItem mapToMediaItem(Map song, {
-    bool addedByAutoplay = false,
-    bool autoplay = true,
-    String? playlistBox
-  }) {
-    // Lấy rawUrl từ key 'url'
+  /// Chuyển Map (song) thành MediaItem, trong đó:
+  /// - id: URL MP3 (đã fix https nếu cần)
+  /// - extras['songId']: ID số của bài (để gọi API share, view, favorite, v.v.)
+  static MediaItem mapToMediaItem(
+      Map song, {
+        bool addedByAutoplay = false,
+        bool autoplay = true,
+        String? playlistBox,
+      }) {
     final rawUrl = (song['url'] as String?) ?? '';
-    // Nếu rawUrl khởi đầu bằng 'http://', đổi thành 'https://'
     final fixedUrl = rawUrl.startsWith('http://')
         ? rawUrl.replaceFirst('http://', 'https://')
         : rawUrl;
 
-    // Lấy imageUri nếu có, convert 'http:' thành 'https:' nếu cần
     String rawImage = (song['image'] as String?) ?? '';
-    final fixedImageUrl =
-    rawImage.startsWith('http://') ? rawImage.replaceFirst('http://', 'https://') : rawImage;
+    final fixedImageUrl = rawImage.startsWith('http://')
+        ? rawImage.replaceFirst('http://', 'https://')
+        : rawImage;
+
+    // Lấy ID số của bài (string) từ trường 'id' map
+    final idNumber = (song['id']?.toString() ?? '');
 
     return MediaItem(
-      // Quan trọng: id phải là URL MP3, không phải map['id'] (là số)
+      // id dùng để play: chính là URL MP3 (đã bảo đảm https)
       id: fixedUrl,
 
-      // Thông tin mô tả
       album: song['album']?.toString() ?? '',
       artist: song['artist']?.toString() ?? '',
       duration: Duration(
@@ -38,15 +41,13 @@ class MediaItemConverter {
         ),
       ),
       title: song['title']?.toString() ?? '',
-
-      // artUri parse từ 'image' (nếu backend trả về), đã replace http→https
       artUri: Uri.tryParse(fixedImageUrl) ?? Uri(),
-
       genre: song['genre']?.toString() ?? '',
 
       extras: {
+        'songId': idNumber,      // ← ID số để gọi API share, view, favorite, v.v.
+        'url': fixedUrl,         // ← URL MP3 để Web play
         'user_id': song['user_id'],
-        'url': fixedUrl,         // Lưu lại URL trong extras, để audio_service non-web dùng
         'album_id': song['album_id'],
         'addedByAutoplay': addedByAutoplay,
         'autoplay': autoplay,
@@ -55,7 +56,6 @@ class MediaItemConverter {
     );
   }
 }
-
 
 String getImageUrl(String? imageUrl, {String quality = 'high'}) {
   if (imageUrl == null) return '';
@@ -66,20 +66,17 @@ String getImageUrl(String? imageUrl, {String quality = 'high'}) {
           .replaceAll("50x50", "500x500")
           .replaceAll("150x150", "500x500");
     case 'medium':
-      return imageUrl
-          .trim()
+      return imageUrl.trim()
           .replaceAll("http:", "https:")
           .replaceAll("50x50", "150x150")
           .replaceAll("500x500", "150x150");
     case 'low':
-      return imageUrl
-          .trim()
+      return imageUrl.trim()
           .replaceAll("http:", "https:")
           .replaceAll("150x150", "50x50")
           .replaceAll("500x500", "50x50");
     default:
-      return imageUrl
-          .trim()
+      return imageUrl.trim()
           .replaceAll("http:", "https:")
           .replaceAll("50x50", "500x500")
           .replaceAll("150x150", "500x500");

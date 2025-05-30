@@ -66,7 +66,6 @@ class PlayerInvoke {
         final fixedUrl = rawUrl.startsWith('http://')
             ? rawUrl.replaceFirst('http://', 'https://')
             : rawUrl;
-        // Thêm debug để chắc rawUrl, fixedUrl
         debugPrint("🔧 [PlayerInvoke] rawUrl = $rawUrl → fixedUrl = $fixedUrl");
         return item.copyWith(id: fixedUrl);
       }).toList();
@@ -77,10 +76,14 @@ class PlayerInvoke {
         return;
       }
 
-      // Nếu chạy Web, ta chỉ gọi playAS (just_audio) rồi return
+      // Nếu chạy Web, ta cần truyền playlist + startIndex để Web quản lý đúng webPlaylist/webIndex
       if (kIsWeb) {
-        debugPrint("▶️ [PlayerInvoke] Đang chạy Web, gọi playAS(url)");
-        await pageManager.playAS(mediaItem);
+        debugPrint("▶️ [PlayerInvoke] Đang chạy Web, gọi playAS(url, playlist, startIndex)");
+        await pageManager.playAS(
+          mediaItem,
+          playlist: fixedQueue,
+          startIndex: index,
+        );
         playerTapTime = DateTime.now();
         return;
       }
