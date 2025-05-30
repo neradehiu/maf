@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
 import 'package:get_storage/get_storage.dart';
+import 'package:flutter/foundation.dart';
 
 class PlaylistsView extends StatefulWidget {
   const PlaylistsView({super.key});
@@ -12,7 +12,7 @@ class PlaylistsView extends StatefulWidget {
 }
 
 class _PlaylistsViewState extends State<PlaylistsView> {
-  File? _selectedFile;
+  PlatformFile? _selectedFile;
   final TextEditingController _songNameController = TextEditingController();
   final TextEditingController _artistNameController = TextEditingController();
   final TextEditingController _genreController = TextEditingController();
@@ -21,10 +21,10 @@ class _PlaylistsViewState extends State<PlaylistsView> {
   final storage = GetStorage();
 
   void _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (result != null && result.files.single.path != null) {
+    final result = await FilePicker.platform.pickFiles(type: FileType.audio, withData: true);
+    if (result != null && result.files.single.bytes != null) {
       setState(() {
-        _selectedFile = File(result.files.single.path!);
+        _selectedFile = result.files.single;
       });
     }
   }
@@ -62,11 +62,20 @@ class _PlaylistsViewState extends State<PlaylistsView> {
         request.fields['genre'] = _genreController.text;
       }
 
-      // 👇 QUAN TRỌNG: đúng tên "file" theo backend
-      request.files.add(await http.MultipartFile.fromPath(
-        'file',
-        _selectedFile!.path,
-      ));
+      if (kIsWeb) {
+
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          _selectedFile!.bytes!,
+          filename: _selectedFile!.name,
+        ));
+      } else {
+
+        request.files.add(await http.MultipartFile.fromPath(
+          'file',
+          _selectedFile!.path!,
+        ));
+      }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -118,11 +127,7 @@ class _PlaylistsViewState extends State<PlaylistsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
-        title: const Text("Thêm nhạc", style: TextStyle(color: Colors.white)),
-      ),
+      backgroundColor: const Color(0xFF2C2F3C),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -140,7 +145,7 @@ class _PlaylistsViewState extends State<PlaylistsView> {
             if (_selectedFile != null) ...[
               const SizedBox(height: 10),
               Text(
-                "Đã chọn: ${_selectedFile!.path.split('/').last}",
+                "Đã chọn: ${_selectedFile!.name}",
                 style: const TextStyle(color: Colors.greenAccent),
               ),
             ],

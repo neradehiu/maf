@@ -7,7 +7,7 @@ import 'package:music_player/view/songs/genres_view.dart';
 import 'package:music_player/view/songs/playlists_view.dart';
 import 'package:music_player/view/songs/equalizer_view.dart';
 import 'package:music_player/view/songs/search_view.dart';
-import 'package:music_player/view/songs/top_view_songs_view.dart'; // ✅ Import màn Top View
+import 'package:music_player/view/songs/top_view_songs_view.dart';
 
 import '../../common/color_extension.dart';
 import '../../view_model/splash_view_model.dart';
@@ -27,7 +27,7 @@ class _SongsViewState extends State<SongsView> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    controller = TabController(length: 8, vsync: this); // ✅ Cập nhật số tab: 8
+    controller = TabController(length: 8, vsync: this);
     controller?.addListener(() {
       selectTab = controller?.index ?? 0;
       setState(() {});
@@ -63,7 +63,7 @@ class _SongsViewState extends State<SongsView> with SingleTickerProviderStateMix
           IconButton(
             onPressed: () {
               Get.find<SplashViewMode>().openDrawer();
-              Get.to(() => const SearchView()); // ✅ Mở màn tìm kiếm
+              Get.to(() => const SearchView());
             },
             icon: Image.asset(
               "assets/img/search.png",
@@ -104,7 +104,7 @@ class _SongsViewState extends State<SongsView> with SingleTickerProviderStateMix
                 Tab(text: "GENRES"),
                 Tab(text: "EQUALIZER"),
                 Tab(text: "FAVORITES"),
-                Tab(text: "TOP VIEW"), // ✅ Tab mới
+                Tab(text: "TOP VIEW"),
               ],
             ),
           ),
