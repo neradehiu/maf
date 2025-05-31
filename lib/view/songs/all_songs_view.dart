@@ -33,7 +33,7 @@ class _AllSongsViewState extends State<AllSongsView> {
             child: Image.asset(
               'assets/img/nendanhsachnhac.png',
               fit: BoxFit.cover,
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withOpacity(0.5),
               colorBlendMode: BlendMode.darken,
             ),
           ),

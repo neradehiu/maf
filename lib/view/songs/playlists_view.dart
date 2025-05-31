@@ -126,52 +126,99 @@ class _PlaylistsViewState extends State<PlaylistsView> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF2C2F3C),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            const Text(
-              "🎶 Tải lên bài hát mới",
-              style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _pickFile,
-              icon: const Icon(Icons.upload_file),
-              label: const Text("Chọn file nhạc"),
-            ),
-            if (_selectedFile != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                "Đã chọn: ${_selectedFile!.name}",
-                style: const TextStyle(color: Colors.greenAccent),
-              ),
-            ],
-            const SizedBox(height: 20),
-            _buildTextField(controller: _songNameController, label: "Tên bài hát"),
-            const SizedBox(height: 10),
-            _buildTextField(controller: _artistNameController, label: "Tên ca sĩ"),
-            const SizedBox(height: 10),
-            _buildTextField(controller: _genreController, label: "Thể loại (tuỳ chọn)"),
-            const SizedBox(height: 30),
-            _isUploading
-                ? const CircularProgressIndicator()
-                : ElevatedButton.icon(
-              onPressed: _uploadSong,
-              icon: const Icon(Icons.cloud_upload),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-              ),
-              label: const Text(
-                "Thêm nhạc",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      body: Stack(
+        children: [
+          // Nền ảnh full screen
+          Container(
+            width: size.width,
+            height: size.height,
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/img/nenadd.png'),
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(
+                  Colors.black.withOpacity(0.3),
+                  BlendMode.darken,
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          // Nội dung cuộn được
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  const Text(
+                    "🎶 TẢI LÊN BÀI HÁT MỚI",
+                    style: TextStyle(
+                      fontSize: 22,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: _pickFile,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text("Chọn file nhạc"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0x347a1bf1),
+                    ),
+                  ),
+                  if (_selectedFile != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      "Đã chọn: ${_selectedFile!.name}",
+                      style: const TextStyle(color: Colors.greenAccent),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _songNameController,
+                    label: "Tên bài hát",
+                  ),
+                  const SizedBox(height: 10),
+                  _buildTextField(
+                    controller: _artistNameController,
+                    label: "Tên ca sĩ",
+                  ),
+                  const SizedBox(height: 10),
+                  _buildTextField(
+                    controller: _genreController,
+                    label: "Thể loại (tuỳ chọn)",
+                  ),
+                  const SizedBox(height: 30),
+                  _isUploading
+                      ? const CircularProgressIndicator()
+                      : ElevatedButton.icon(
+                    onPressed: _uploadSong,
+                    icon: const Icon(Icons.cloud_upload),
+                    label: const Text(
+                      "Thêm nhạc",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0x201000c9),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
